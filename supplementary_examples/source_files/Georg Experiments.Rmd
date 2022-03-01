@@ -1,0 +1,33 @@
+---
+title: "Gam Experiments"
+author: "Georg"
+date: "3/1/2022"
+output: pdf_document
+---
+Installing MGCV
+If you have trouble installing on mac, download source from https://cran.r-project.org/web/packages/mgcv/index.html and run a terminal with "R CMD INSTALL packagename.tgz" 
+```{r}
+#install.packages("mgcv")
+library("mgcv")
+help("mgcv-package")
+```
+
+Installing gratia
+```{r}
+#install.packages("gratia")
+library("gratia")
+??gratia
+```
+
+```{r}
+#install.packages("patchwork")
+library(patchwork)
+??patchwork
+```
+
+We should perhaps implement a function, so that we don't need to import accelrometry
+```{r}
+#install.packages("accelerometry")
+library(accelerometry)
+```
+
