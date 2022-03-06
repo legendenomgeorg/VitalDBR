@@ -4,5 +4,39 @@ output: html_document
 ---
 
 
+```{r}
+library(httr)
+install.packages("httr2")
+library(httr2)
+```
 
-asdasdasdasdasd
+
+```{r}
+library(curl)
+```
+
+
+Input:
+  * Track
+  * Interval
+  * # Cases
+  
+
+
+```{r}
+r <- GET('https://api.vitaldb.net/trks')
+```
+
+```{r}
+bin <- content(r, "raw")
+writeBin(bin, "myfile.txt")
+```
+
+
+
+```{r}
+#fd869e25ba82a66cc95b38ed47110bf4f14bb368
+
+
+g <- GET('https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f', add_headers )
+```
