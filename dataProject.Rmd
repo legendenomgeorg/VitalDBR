@@ -30,6 +30,8 @@ r <- GET('https://api.vitaldb.net/trks')
 ```{r}
 bin <- content(r, "raw")
 writeBin(bin, "myfile.txt")
+
+
 ```
 
 
@@ -38,5 +40,15 @@ writeBin(bin, "myfile.txt")
 #fd869e25ba82a66cc95b38ed47110bf4f14bb368
 
 
-g <- GET('https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f', add_headers )
+library(data.table)
+install.packages("R.utils")
+library(R.utils)
+download.file(url = "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz",
+              destfile = file.path("data.csv.gz"))
+
+d <- fread("data.csv.gz", sep = ',')
+
+gunzip("data.csv.gz", remove=FALSE)
+
+
 ```
