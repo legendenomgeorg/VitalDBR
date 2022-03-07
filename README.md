@@ -7,4 +7,4 @@ The package is made as a part of the course "Data Project" at Aarhus University,
 By Frederik Pedersen, Georg Svendsen and Jonas Arentoft
 
 
-With guidance from associate professor [Simon Vistisen](https://pure.au.dk/portal/da/persons/simon-tilma-vistisen(fbb332fc-fc77-4471-854f-304fe9bb6eaa).html) and Ph.d.[Johannes Enevoldsen](https://pure.au.dk/portal/da/persons/johannes-enevoldsen(c31d233d-c018-4ce4-a8cf-0779ed2e4dae).html)
+With guidance from associate professor [Simon Vistisen](https://pure.au.dk/portal/da/persons/simon-tilma-vistisen(fbb332fc-fc77-4471-854f-304fe9bb6eaa).html) and Ph.d. student [Johannes Enevoldsen](https://pure.au.dk/portal/da/persons/johannes-enevoldsen(c31d233d-c018-4ce4-a8cf-0779ed2e4dae).html)
