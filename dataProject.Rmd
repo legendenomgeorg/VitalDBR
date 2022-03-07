@@ -6,7 +6,6 @@ output: html_document
 
 ```{r}
 library(httr)
-install.packages("httr2")
 library(httr2)
 ```
 
@@ -38,5 +37,5 @@ writeBin(bin, "myfile.txt")
 #fd869e25ba82a66cc95b38ed47110bf4f14bb368
 
 
-g <- GET('https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f', add_headers )
+g <- GET('https://api.vitaldb.net/labs')
 ```
