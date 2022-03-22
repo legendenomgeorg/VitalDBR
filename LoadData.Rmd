@@ -15,16 +15,6 @@ library(tidyverse)
 
 ```{r}
 
-
-
-```
-
-
-
-
-
-```{r}
-
   # Brugeren inputter én eller flere tnames i load_case, f.eks. c(BIS/EMG, Primus/INSP_DES, Solar8000/BT)
   # Brugeren inputter også ét (og kun ét) case id. f.eks. "17"
   # Funktionen samler nu alle "tids" forbundet med de forskellige tnames i case 1. ( i det her tilfælde 3 stk.)
@@ -37,13 +27,39 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
-load_trk <- function(tid){
+load_trk <- function(tid, interval){
   start <- "https://api.vitaldb.net/"
-  end <- ".csv.gz"
+  end <- ".csv.gz" 
   # start + tid + end
   url <- paste(start, tid, end, sep="")
-  print(load_VDB(url))
-  return(load_VDB(url))
+  df = load_VDB(url)
+  df$Time <- df$Time/interval
+  df$Time[3] <- NaN
+  
+  nsamp <- nrow(!is.na(df))
+  #View(nsamp)
+  #View(df$Time)
+  
+  ret = data.frame(matrix(ncol=1, nrow=nsamp, NaN))
+  
+  #View(df$Time)
+  if(any(is.na(df$Time))){
+    print("if")
+    
+    if(nsamp != length(df$Time)){
+      print("if3")
+      interval <- seq(from = 0, to = length(df$Time), by = nsamp)
+      ret <- df$Time[interval]
+    }
+    else{
+      print("else2")
+      ret <- df[,2]
+    }
+  }
+  else{
+    print("else")
+  }
+  return(df)
 }
 
 load_trks <- function(tids){
@@ -67,7 +83,8 @@ load_case <- function(tnames, caseid){
   load_trks(tids)
 }
 
-load_case(c("BIS/EMG","Solar8000/BT"), 1)
+#load_case(c("BIS/EMG","Solar8000/BT"), 1)
+load_trk("0cb17dee113443b52e3d71b55e3be170d5f60117",10)
 
 
 
