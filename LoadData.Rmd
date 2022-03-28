@@ -27,38 +27,12 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
-load_trk <- function(tid, interval){
+load_trk <- function(tid){
   start <- "https://api.vitaldb.net/"
   end <- ".csv.gz" 
   # start + tid + end
   url <- paste(start, tid, end, sep="")
   df = load_VDB(url)
-  df$Time <- df$Time/interval
-  df$Time[3] <- NaN
-  
-  nsamp <- nrow(!is.na(df))
-  #View(nsamp)
-  #View(df$Time)
-  
-  ret = data.frame(matrix(ncol=1, nrow=nsamp, NaN))
-  
-  #View(df$Time)
-  if(any(is.na(df$Time))){
-    print("if")
-    
-    if(nsamp != length(df$Time)){
-      print("if3")
-      interval <- seq(from = 0, to = length(df$Time), by = nsamp)
-      ret <- df$Time[interval]
-    }
-    else{
-      print("else2")
-      ret <- df[,2]
-    }
-  }
-  else{
-    print("else")
-  }
   return(df)
 }
 
@@ -84,7 +58,8 @@ load_case <- function(tnames, caseid){
 }
 
 #load_case(c("BIS/EMG","Solar8000/BT"), 1)
-load_trk("0cb17dee113443b52e3d71b55e3be170d5f60117",10)
+load_trk("087670cd3f03109ff5028f268587a9801865afca")
+load_trk("5154b6395a8636ea82d0e2648f2957227f0ad816")
 
 
 
