@@ -375,7 +375,6 @@ def load_trk(tid, interval=1):
 
     if len(dtvals) == 0:
         return np.empty(0)
-    
     dtvals[:,0] /= interval  # convert time to row
     nsamp = int(np.nanmax(dtvals[:,0])) + 1  # find maximum index (array length)
     ret = np.full(nsamp, np.nan)  # create a dense array
@@ -390,7 +389,7 @@ def load_trk(tid, interval=1):
             ret[int(idx)] = val
 
     return ret
-
+df = load_trk("afd182c102c5af625d3f217280b3766d453d9e3f")
 
 def load_trks(tids, interval=1):
     trks = []

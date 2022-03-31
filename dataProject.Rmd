@@ -1,0 +1,140 @@
+---
+title: "dataProject_v1"
+output: html_document
+---
+
+
+```{r}
+library(httr)
+install.packages("httr2")
+library(httr2)
+```
+
+
+```{r}
+library(curl)
+```
+
+
+Input:
+  * Track
+  * Interval
+  * # Cases
+  
+
+
+```{r}
+r <- GET('https://api.vitaldb.net/trks')
+```
+
+```{r}
+bin <- content(r, "raw")
+writeBin(bin, "myfile.txt")
+
+
+```
+
+
+
+```{r}
+#fd869e25ba82a66cc95b38ed47110bf4f14bb368
+url <- "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz"
+
+library(data.table)
+install.packages("R.utils")
+library(R.utils)
+download.file(url = "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz",
+              destfile = file.path("data.csv.gz"))
+
+d <- fread("data.csv.gz", sep = ',')
+
+
+```
+
+
+
+```{r}
+library(httr)
+url <- "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz"
+x = GET(url, add_headers(.headers = c('Accept-Encoding' = 'gzip')))
+x
+        
+```
+
+```{r}
+url <- "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz"
+url2 <- "https://api.vitaldb.net/trks.csv.gz"
+url3 <- "https://api.vitaldb.net/cases.csv.gz"
+url4 <- "https://api.vitaldb.net/labs.csv.gz"
+load_VDB <- function(file_url) {
+  con <- gzcon(url(file_url))
+  txt <- readLines(con)
+  return(read.csv(textConnection(txt)))
+}
+#loading track data
+trackdata <- load_VDB(url)
+# loading tracks
+tracks <- load_VDB(url2)
+# loading cases
+cases <- load_VDB(url3)
+# loading labs
+labs <- load_VDB(url4)
+
+
+```
+
+
+
+
+
+```{r}
+
+
+
+  # Brugeren inputter én eller flere tnames i load_case, f.eks. c(BIS/EMG, Primus/INSP_DES, Solar8000/BT)
+  # Brugeren inputter også ét (og kun ét) case id. f.eks. "17"
+  # Funktionen samler nu alle "tids" forbundet med de forskellige tnames i case 1. ( i det her tilfælde 3 stk.)
+  # Funktionen kalder nu load_trks(tids), der kalder load_trk(tid) som kalder load vdb (der henter fra api) på alle tid i tids
+  # dermed bliver der returnet 3 tidsserier c(BIS/EMG, Primus/INSP_DES, Solar8000/BT), der alle tilhører case 17
+
+load_case <- function(tnames, caseid=NULL){
+
+  load_trks(tids)
+}
+
+load_trks <- function(tids){
+  data <- data.frame(NA_col = rep(NA, length(tids)))
+  index <- 1
+  for (tid in tids){
+    data[index] <- load_trk(tid)
+    index <- index+1
+  }
+return(data)
+}
+
+
+load_trk <- function(tid){
+  # "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz"
+  start <- "https://api.vitaldb.net/"
+  end <- ".csv.gz"
+  # start + tid + end
+  url <- paste(start,tid,end, sep="")
+  load_VDB(url)
+}
+
+load_VDB <- function(file_url) {
+  #MAGISK FUNKTION FRA STACKEN
+  con <- gzcon(url(file_url))
+  txt <- readLines(con)
+  return(read.csv(textConnection(txt)))
+}
+
+
+#load_trk("afd182c102c5af625d3f217280b3766d453d9e3f")
+
+tids_list <- c("afd182c102c5af625d3f217280b3766d453d9e3f", "2ba4091248ecabc2799ac20e29a0817c2f62323c", "2d372989fd217c5dcc58ef5e9622432ede6a2a15")
+load_trks(tids_list)
+
+
+```
+
