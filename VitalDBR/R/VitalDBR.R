@@ -1,4 +1,4 @@
-#' Loads file from URL
+#' Loads file from URL (helper function)
 #' @export
 #' @param file_url URL for API endpoint
 load_VDB <- function(file_url) {
@@ -7,7 +7,7 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
-#' Loads a data track from VitalDB api
+#' Loads a data track from VitalDB api (helper function)
 #' @export
 #' @param tid Track id
 load_trk <- function(tid){
@@ -19,7 +19,7 @@ load_trk <- function(tid){
   return(df)
 }
 
-#' Load a track belonging to a case
+#' Main function for loading in data
 #' @export
 #' @param tname Name of track
 #' @param caseid A case id, from which you want to load the track given as tname

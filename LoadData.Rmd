@@ -10,8 +10,9 @@ library(R.utils)
 library(data.table)
 library(dplyr)
 
-install.packages("R.utils")
-
+#install.packages("R.utils")
+#install.packages("zoo")
+library(zoo)
 library(tidyverse)
 ```
 
@@ -29,21 +30,56 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
+
+fix_hz <- function(df){
+  constant <- df[2,1]
+  j=2
+  for (i in 3:nrow(df)){
+    df[i,1] <- j*constant
+    j = j+1
+  }
+  return(df)
+}
+
+
+check_hz <- function(df){
+  if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
+    freq = df[2,1]
+    df <- subset (df, select = -Time)
+    df<- na.omit(df)
+    df <- ts(df)
+    return(df)
+    
+  }
+  else {
+    return(df)
+  }
+}
+
+
 load_trk <- function(tid){
   start <- "https://api.vitaldb.net/"
   end <- ".csv.gz" 
   # start + tid + end
   url <- paste(start, tid, end, sep="")
   df = load_VDB(url)
-  return(df)
+  return(check_hz(df))
 }
 
 
-load_case("BIS/EMG", 1)
+load_case <- function(tname, caseid){
+  tracks <- load_VDB("https://api.vitaldb.net/trks.csv.gz")
+  tracks <- tracks[tracks$caseid == caseid,]
+  tid <- (tracks[tracks$tname == tname,])$tid
+  load_trk(tid)
+}
+
+
+df1<-load_case("SNUADC/PLETH", 1)
+nrow(df1)
+plot(df1)
 #load_trk("087670cd3f03109ff5028f268587a9801865afca")
 #load_trk("5154b6395a8636ea82d0e2648f2957227f0ad816")
-
-
 
 ```
 
