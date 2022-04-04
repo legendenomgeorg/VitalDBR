@@ -7,6 +7,7 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
+
 #' Small helper function that converts index into hz
 #' @export
 #' @param x a string with an integer

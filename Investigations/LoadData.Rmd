@@ -2,28 +2,14 @@
 title: "dataProject_v1"
 output: html_document
 ---
-```{r}
-library(httr)
-library(httr2)
-library(curl)
-library(R.utils)
-library(data.table)
-library(dplyr)
-
-#install.packages("R.utils")
-#install.packages("zoo")
-
-library(zoo)
-library(tidyverse)
-```
 
 ```{r}
-
   # Brugeren inputter én eller flere tnames i load_case, f.eks. c(BIS/EMG, Primus/INSP_DES, Solar8000/BT)
   # Brugeren inputter også ét (og kun ét) case id. f.eks. "17"
   # Funktionen samler nu alle "tids" forbundet med de forskellige tnames i case 1. ( i det her tilfælde 3 stk.)
   # Funktionen kalder nu load_trks(tids), der kalder load_trk(tid) som kalder load vdb (der henter fra api) på alle tid i tids
   # dermed bliver der returnet 3 tidsserier c(BIS/EMG, Primus/INSP_DES, Solar8000/BT), der alle tilhører case 17
+  # NOTE fungerer ikke helt sådan her længere, vi kan ikke loade flere tnames
 
 load_VDB <- function(file_url) {
   con <- gzcon(url(file_url))
@@ -69,9 +55,5 @@ load_case <- function(tname, caseid){
 
 df1<-load_case("Primus/AWP", 1)
 
-```
-
-```{r}
-plot(df1)
 ```
 
