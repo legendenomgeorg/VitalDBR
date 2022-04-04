@@ -12,6 +12,7 @@ library(dplyr)
 
 #install.packages("R.utils")
 #install.packages("zoo")
+
 library(zoo)
 library(tidyverse)
 ```
@@ -31,31 +32,23 @@ load_VDB <- function(file_url) {
 }
 
 
-fix_hz <- function(df){
-  constant <- df[2,1]
-  j=2
-  for (i in 3:nrow(df)){
-    df[i,1] <- j*constant
-    j = j+1
-  }
-  return(df)
+fix_hz_index <- function(x,freq) {
+  return(as.numeric(x)*freq)
 }
-
 
 check_hz <- function(df){
   if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
     freq = df[2,1]
     df <- subset (df, select = -Time)
     df<- na.omit(df)
-    df <- ts(df)
+    rownames(df)<- NULL
+    rownames(df) <- lapply(rownames(df), fix_hz_index, freq=freq)
     return(df)
-    
   }
   else {
     return(df)
   }
 }
-
 
 load_trk <- function(tid){
   start <- "https://api.vitaldb.net/"
@@ -66,7 +59,6 @@ load_trk <- function(tid){
   return(check_hz(df))
 }
 
-
 load_case <- function(tname, caseid){
   tracks <- load_VDB("https://api.vitaldb.net/trks.csv.gz")
   tracks <- tracks[tracks$caseid == caseid,]
@@ -75,31 +67,11 @@ load_case <- function(tname, caseid){
 }
 
 
-df1<-load_case("SNUADC/PLETH", 1)
-nrow(df1)
+df1<-load_case("Primus/AWP", 1)
+
+```
+
+```{r}
 plot(df1)
-#load_trk("087670cd3f03109ff5028f268587a9801865afca")
-#load_trk("5154b6395a8636ea82d0e2648f2957227f0ad816")
-
-```
-
-```{r}
-#url <- "https://api.vitaldb.net/afd182c102c5af625d3f217280b3766d453d9e3f.csv.gz"
-url2 <- "https://api.vitaldb.net/trks.csv.gz"
-url3 <- "https://api.vitaldb.net/cases.csv.gz"
-url4 <- "https://api.vitaldb.net/labs.csv.gz"
-
-#loading track data
-trackdata <- load_VDB(url)
-# loading tracks
-tracks <- load_VDB(url2)
-# loading cases
-cases <- load_VDB(url3)
-# loading labs
-labs <- load_VDB(url4)
-```
-
-```{r}
-closeAllConnections()
 ```
 
