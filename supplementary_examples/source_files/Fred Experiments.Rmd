@@ -341,4 +341,13 @@ closeAllConnections()
 
 
 
+# TESTING IMPORT OF R PACKAGE
+
+```{r}
+library(devtools)
+
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+```
+
+
 

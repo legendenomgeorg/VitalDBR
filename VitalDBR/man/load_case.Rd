@@ -2,15 +2,15 @@
 % Please edit documentation in R/VitalDBR.R
 \name{load_case}
 \alias{load_case}
-\title{PENDING DESCRIPTION OF FUNCTION}
+\title{Main function for loading in data}
 \usage{
-load_case(tnames, caseid)
+load_case(tname, caseid)
 }
 \arguments{
-\item{tnames}{PENDING EXPLANATION OF VARIABLE}
+\item{tname}{Name of track}
 
-\item{caseid}{PENDING EXPLANATION OF VARIABLE}
+\item{caseid}{A case id, from which you want to load the track given as tname}
 }
 \description{
-PENDING DESCRIPTION OF FUNCTION
+Main function for loading in data
 }

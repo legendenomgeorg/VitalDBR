@@ -2,13 +2,13 @@
 % Please edit documentation in R/VitalDBR.R
 \name{load_VDB}
 \alias{load_VDB}
-\title{Loads file from URL}
+\title{Loads file from URL (helper function)}
 \usage{
 load_VDB(file_url)
 }
 \arguments{
-\item{file_url}{URL for the VitablDB website}
+\item{file_url}{URL for API endpoint}
 }
 \description{
-Loads file from URL
+Loads file from URL (helper function)
 }

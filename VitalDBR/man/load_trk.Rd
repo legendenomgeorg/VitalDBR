@@ -2,13 +2,13 @@
 % Please edit documentation in R/VitalDBR.R
 \name{load_trk}
 \alias{load_trk}
-\title{Loads a data track from VitalDB api}
+\title{Loads a data track from VitalDB api (helper function)}
 \usage{
 load_trk(tid)
 }
 \arguments{
-\item{tid}{PENDING EXPLANATION OF VARIABLE}
+\item{tid}{Track id}
 }
 \description{
-Loads a data track from VitalDB api
+Loads a data track from VitalDB api (helper function)
 }
