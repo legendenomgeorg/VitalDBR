@@ -1,0 +1,77 @@
+---
+title: "dataProject_v1"
+output: html_document
+---
+```{r}
+library(httr)
+library(httr2)
+library(curl)
+library(R.utils)
+library(data.table)
+library(dplyr)
+
+#install.packages("R.utils")
+#install.packages("zoo")
+
+library(zoo)
+library(tidyverse)
+```
+
+```{r}
+
+  # Brugeren inputter én eller flere tnames i load_case, f.eks. c(BIS/EMG, Primus/INSP_DES, Solar8000/BT)
+  # Brugeren inputter også ét (og kun ét) case id. f.eks. "17"
+  # Funktionen samler nu alle "tids" forbundet med de forskellige tnames i case 1. ( i det her tilfælde 3 stk.)
+  # Funktionen kalder nu load_trks(tids), der kalder load_trk(tid) som kalder load vdb (der henter fra api) på alle tid i tids
+  # dermed bliver der returnet 3 tidsserier c(BIS/EMG, Primus/INSP_DES, Solar8000/BT), der alle tilhører case 17
+
+load_VDB <- function(file_url) {
+  con <- gzcon(url(file_url))
+  txt <- readLines(con)
+  return(read.csv(textConnection(txt)))
+}
+
+
+fix_hz_index <- function(x,freq) {
+  return(as.numeric(x)*freq)
+}
+
+check_hz <- function(df){
+  if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
+    freq = df[2,1]
+    df <- subset (df, select = -Time)
+    df<- na.omit(df)
+    rownames(df)<- NULL
+    rownames(df) <- lapply(rownames(df), fix_hz_index, freq=freq)
+    return(df)
+  }
+  else {
+    return(df)
+  }
+}
+
+load_trk <- function(tid){
+  start <- "https://api.vitaldb.net/"
+  end <- ".csv.gz" 
+  # start + tid + end
+  url <- paste(start, tid, end, sep="")
+  df = load_VDB(url)
+  return(check_hz(df))
+}
+
+load_case <- function(tname, caseid){
+  tracks <- load_VDB("https://api.vitaldb.net/trks.csv.gz")
+  tracks <- tracks[tracks$caseid == caseid,]
+  tid <- (tracks[tracks$tname == tname,])$tid
+  load_trk(tid)
+}
+
+
+df1<-load_case("Primus/AWP", 1)
+
+```
+
+```{r}
+plot(df1)
+```
+
