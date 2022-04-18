@@ -21,12 +21,10 @@ fix_hz_index <- function(x,freq) {
 #' @param df The dataframe we want to check. If
 check_hz <- function(df){
   if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
-    freq = df[2,1] # picking out the frequency of the dataset
-    df <- subset (df, select = -Time) #Removing time column
-    df<- na.omit(df) # Removing NA's
-    rownames(df)<- NULL # resetting index to start at 1
-    rownames(df) <- lapply(rownames(df), fix_hz_index, freq=freq) # changing the index into hz
-    return(df)
+    freq = df[2,1]
+    df <- subset (df, select = -Time)
+    df<- na.omit(df)
+    return(ts(df, frequency = 1/freq))
   }
   else {
     return(df)

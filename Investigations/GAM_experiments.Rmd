@@ -5,3 +5,25 @@ date: "4/4/2022"
 output: html_document
 ---
 
+Importing VitalDBR
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+```
+
+Loading in data
+```{r}
+df <- load_case('Primus/AWP', 1)
+```
+
+
+```{r}
+df
+```
+
+
+```{r}
+ts(df)
+```
+

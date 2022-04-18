@@ -17,19 +17,12 @@ load_VDB <- function(file_url) {
   return(read.csv(textConnection(txt)))
 }
 
-
-fix_hz_index <- function(x,freq) {
-  return(as.numeric(x)*freq)
-}
-
 check_hz <- function(df){
   if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
     freq = df[2,1]
     df <- subset (df, select = -Time)
     df<- na.omit(df)
-    rownames(df)<- NULL
-    rownames(df) <- lapply(rownames(df), fix_hz_index, freq=freq)
-    return(df)
+    return(ts(df, frequency = 1/freq))
   }
   else {
     return(df)
@@ -55,5 +48,14 @@ load_case <- function(tname, caseid){
 
 df1<-load_case("Primus/AWP", 1)
 
+```
+
+```{r}
+df1
+```
+
+
+```{r}
+load_VDB("https://api.vitaldb.net/fd869e25ba82a66cc95b38ed47110bf4f14bb368")
 ```
 
