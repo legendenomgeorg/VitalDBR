@@ -1,0 +1,39 @@
+---
+title: "Heartbeat from Art"
+author: "Georg"
+date: "4/6/2022"
+output: pdf_document
+---
+
+Importing VitalDBR
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+```
+
+Loading in data
+```{r}
+df <- load_case('Primus/AWP', 1)
+
+```
+
+```{r}
+df
+```
+
+
+```{r}
+test <- ts(df, frequency=62.5) # frequncy = 1/0.016
+plot(test)
+test[1:10] # første 10 observationer
+tisek<- test[100000:(100000+(10*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
+plot(tisek, type='l')
+```
+Lav algortime der finder starttidspunkter (lige der hvor den riser)
+
+
+```{r}
+df[1:100, ]
+```
+
