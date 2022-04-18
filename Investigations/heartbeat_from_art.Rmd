@@ -24,10 +24,9 @@ df
 
 
 ```{r}
-test <- ts(df, frequency=62.5) # frequncy = 1/0.016
-plot(test)
-test[1:10] # første 10 observationer
-tisek<- test[100000:(100000+(10*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
+plot(df)
+df[1:10] # første 10 observationer
+tisek<- df[100000:(100000+(10*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
 plot(tisek, type='l')
 ```
 Lav algortime der finder starttidspunkter (lige der hvor den riser)
