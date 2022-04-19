@@ -1,0 +1,28 @@
+---
+title: "Inspiration from AWP"
+author: "Georg"
+date: "4/19/2022"
+output: html_document
+---
+
+Importing VitalDBR
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+```
+
+Loading in data
+```{r}
+df <- load_case('Primus/AWP', 1)
+
+```
+
+```{r}
+plot(df)
+```
+```{r}
+tisek<- df[100000:(100000+(10*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
+plot(tisek, type='l')
+```
+
