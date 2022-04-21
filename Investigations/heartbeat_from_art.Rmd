@@ -18,16 +18,15 @@ df <- load_case('SNUADC/ART', 1)
 
 ```
 
-```{r}
-df
-```
 
 
 ```{r}
 #plot(df)
 df[1:10] # første 10 observationer
-tisek<- df[100000:(100000+(10*500))] #  10 sekunder fra 10000 (cirka 625 observationer)
-plot(tisek, type='l')
+tisek<- df[2000000:(2000000+(10*500))] #  10 sekunder fra 10000 (cirka 625 observationer)
+tisek2 <- window(df)
+tisek2
+#plot(tisek2, type='l')
 ```
 Lav algortime der finder starttidspunkter (lige der hvor den riser)
 
@@ -41,6 +40,6 @@ load_VDB("https://api.vitaldb.net/724cdd7184d7886b8f7de091c5b135bd01949959.csv.g
 ```
 
 ```{r}
-1/0.002
+frequency(df)
 ```
 

@@ -8,8 +8,12 @@ output: html_document
 Importing VitalDBR
 ```{r}
 library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
+#install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
+#remotes::install_github("https://github.com/JohannesNE/waveformtools")
+library(waveformtools)
+#install.packages("GENEAread")
+library(GENEAread)
 ```
 
 Loading in data
@@ -22,7 +26,19 @@ df <- load_case('Primus/AWP', 1)
 plot(df)
 ```
 ```{r}
-tisek<- df[100000:(100000+(10*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
-plot(tisek, type='l')
+sub<- window(df,1000,1010) #  10 sekunder fra 10000 (cirka 625 observationer)
+plot(sub, type='l')
+```
+
+
+```{r}
+peaks <-find_peaks(sub, m=5)
+
+plot(sub,line='l')
+points(window(sub, value=peaks))
+
+
+```
+```{r}
 ```
 
