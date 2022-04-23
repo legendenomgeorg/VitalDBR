@@ -70,7 +70,7 @@ peaksSorted <-peaks[!is.na(peaks)]
 
 
 ```{r}
-sek <- 600
+sek <- 10
 tisek<- df[105200:(105200+(sek*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
 
 peaks <- myFunc(tisek, 0.9)

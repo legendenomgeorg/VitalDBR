@@ -24,7 +24,9 @@ check_hz <- function(df){
     freq = df[2,1]
     df <- subset (df, select = -Time)
     df<- na.omit(df)
-    return(ts(df, frequency = 1/freq))
+    df <- cbind(df,"Time"=1:nrow(df)*freq)
+    df <- df[, c(2,1)] # reorder columns
+    return(df)
   }
   else {
     return(df)

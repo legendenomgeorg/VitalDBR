@@ -45,13 +45,19 @@ load_case <- function(tname, caseid){
   load_trk(tid)
 }
 
+# a function that subsets a timeseries from input in seconds.
+subset_ts <- function(ts,start_sec, end_sec) {
+  return(window(ts,start,end))
+}
 
-df1<-load_case("Primus/AWP", 1)
+
+df<-load_case("Primus/AWP", 1)
 
 ```
 
 ```{r}
-df1
+plot(subset_ts(df,1000,1010))
+
 ```
 
 
