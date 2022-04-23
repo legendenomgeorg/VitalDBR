@@ -42,7 +42,7 @@ load_trk <- function(tid){
   # start + tid + end
   url <- paste(start, tid, end, sep="")
   df = load_VDB(url)
-  return(check_hz(df))
+  check_hz(df)
 }
 
 #' Main function for loading in data

@@ -19,8 +19,8 @@ df <- load_case('SNUADC/ART', 1)
 ```
 
 ```{r}
-df <- ts(df,frequency = 500) # Det her gør funktionen nu, men den er ikke blevet pushet
-
+df <-data.frame(df)
+df <- cbind(df,"Time"=1:nrow(df))
 ```
 
 
@@ -34,30 +34,6 @@ plot(sub$Time, sub$SNUADC.ART,type='l')
 sub
 
 ```
-Lav algortime der finder starttidspunkter (lige der hvor den riser)
 
-```{r}
-#signal:
-sub <- filter_signal(sub,25,1,500)
-peaks <- find_peaks(sub$SNUADC.ART_filt,m=1)
-dips <- find_peaks(-sub$SNUADC.ART_filt,m=1)
-plot(sub$Time, sub$SNUADC.ART, type='l')
-for (x in peaks){
-  abline(v=x,col="blue")
-  
-}
-for (x in dips){
-  abline(v=x,col="red")
-  
-}
-```
 
-```{r}
-plot(sub$Time, sub$SNUADC.ART, type='l')
-plot(sub$Time, sub$SNUADC.ART_filt, type='l')
-```
-```{r}
-#find_abp_beats(sub, 1, 2, sample_rate=500 ) #Virker hvis vi laver tid om til sekunder
-head(sub)
-```
 
