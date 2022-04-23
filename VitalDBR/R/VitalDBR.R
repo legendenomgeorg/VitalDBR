@@ -25,7 +25,7 @@ check_hz <- function(df){
     df <- subset (df, select = -Time)
     df<- na.omit(df)
     df <- cbind(df,"Time"=1:nrow(df)*freq)
-    df <- df[, c(2,1)] # reorder columns
+    df <- df[, c(2,1)] # reorder columns'
     return(df)
   }
   else {
@@ -42,7 +42,7 @@ load_trk <- function(tid){
   # start + tid + end
   url <- paste(start, tid, end, sep="")
   df = load_VDB(url)
-  check_hz(df)
+  return(check_hz(df))
 }
 
 #' Main function for loading in data
@@ -53,6 +53,9 @@ load_case <- function(tname, caseid){
   tracks <- load_VDB("https://api.vitaldb.net/trks.csv.gz")
   tracks <- tracks[tracks$caseid == caseid,]
   tid <- (tracks[tracks$tname == tname,])$tid
-  load_trk(tid)
+  return(load_trk(tid))
 }
 
+
+
+df <- load_case('SNUADC/ART', 1)
