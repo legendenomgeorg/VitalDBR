@@ -22,7 +22,7 @@ df <- load_case('Primus/AWP', 1)
 plot(df)
 ```
 ```{r}
-tisek<- df[100000:(100000+(20*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
+tisek<- df[100000:(100000+(100*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
 plot(tisek, type='l')
 abline(v = 267)
 abline(v=580)
@@ -70,7 +70,7 @@ peaksSorted <-peaks[!is.na(peaks)]
 
 
 ```{r}
-sek <- 600
+sek <- 10
 tisek<- df[105200:(105200+(sek*62.5))] #  10 sekunder fra 10000 (cirka 625 observationer)
 
 peaks <- myFunc(tisek, 0.9)
