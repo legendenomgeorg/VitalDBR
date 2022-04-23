@@ -19,19 +19,23 @@ df <- load_case('SNUADC/ART', 1)
 ```
 
 ```{r}
-df <-data.frame(df)
-df <- cbind(df,"Time"=1:nrow(df))
+df
+```
+
+
+```{r}
+df
+tid <- 10000
+sek <- 10
+freq <- 1/0.002
+sub <- df[tid:tid+freq*sek,]
 ```
 
 
 
 ```{r}
-#cleaning
-sub <- window(df,1000,1010)
-sub <- data.frame(sub)
-sub <- cbind(sub,"Time"=1:nrow(sub))
+sub$Time
 plot(sub$Time, sub$SNUADC.ART,type='l')
-sub
 
 ```
 
