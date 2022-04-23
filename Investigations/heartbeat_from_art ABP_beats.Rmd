@@ -21,23 +21,36 @@ df <- load_case('SNUADC/ART', 1)
 ```{r}
 df
 ```
-
-
 ```{r}
-df
-tid <- 10000
-sek <- 10
+start <- 2000000
+sek <- 30
 freq <- 1/0.002
-sub <- df[tid:tid+freq*sek,]
+sub <- df[start:(start+(sek*freq)),]
+sub <- filter_signal(sub,30,2,500)
+sub
 ```
-
 
 
 ```{r}
-sub$Time
-plot(sub$Time, sub$SNUADC.ART,type='l')
 
+plot(sub$Time,sub$SNUADC.ART_filt, type='l')
 ```
 
 
+```{r}
+beats <- find_abp_beats(sub,3)
+```
+```{r}
+systolic <- beats$time_systole
+diastolic <- beats$time
+plot(sub$Time, sub$SNUADC.ART, type='l')
+for (x in systolic){
+  abline(v=x,col="blue")
+  
+}
+for (x in diastolic){
+  abline(v=x,col="red")
+  
+}
+```
 

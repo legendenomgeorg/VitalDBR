@@ -1,0 +1,67 @@
+---
+title: "Inspiration from AWP"
+author: "Georg"
+date: "4/19/2022"
+output: html_document
+---
+
+Importing VitalDBR
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+#install.packages("gsignal")
+library(gsignal)
+```
+
+Loading in data
+```{r}
+df <- load_case('Primus/AWP', 1)
+
+```
+
+```{r}
+df
+
+```
+```{r}
+sek <- 100
+start <- 597000
+sub<- df[start:(start+(sek*62.5)),] #  10 sekunder fra 10000 (cirka 625 observationer)
+#sub <- filter_signal(sub, 25,2,300) # Burde være 62.5 istedet for 1000, men der sker ikke rigtig noget med waveformen
+#par(mfrow=c(1,2))
+plot(sub$Time, sub$Primus.AWP, type='l')
+#plot(sub$Time, sub$Primus.AWP_filt, type='l')
+
+
+```
+
+```{r}
+
+#Convolve step
+conv1 <- data.frame(convolve(sub$Time,sub$Primus.AWP, type="circular" ))
+conv1 <- cbind(conv1,sub$Time)
+conv1 <- conv1[, c(2,1)]
+names(conv1)[1] <- "Time"
+names(conv1)[2] <- "Values"
+peaks <- gsignal::findpeaks(conv1$Values)
+conv1
+peaks <- conv1$Time[peaks$loc]
+peaks
+par(mfrow=c(2,1))
+plot(conv1$Time, conv1$Values, type='l')
+for (x in peaks){
+  abline(v=x,col="blue")
+}
+plot(sub$Time,sub$Primus.AWP, type='l')
+for (x in peaks){
+  abline(v=x,col="blue")
+}
+
+```
+
+
+
+
+
+
