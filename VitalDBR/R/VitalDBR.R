@@ -26,9 +26,11 @@ check_hz <- function(df){
     df<- na.omit(df)
     df <- cbind(df,"Time"=1:nrow(df)*freq)
     df <- df[, c(2,1)] # reorder columns'
+    rownames(df) <- NULL
     return(df)
   }
   else {
+    rownames(df) <- NULL
     return(df)
   }
 }
@@ -59,3 +61,5 @@ load_case <- function(tname, caseid){
 
 
 df <- load_case('SNUADC/ART', 1)
+View(df)
+
