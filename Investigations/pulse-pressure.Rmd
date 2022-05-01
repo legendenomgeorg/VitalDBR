@@ -1,0 +1,71 @@
+---
+title: "asd"
+output: html_document
+---
+
+
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+#install.packages("gsignal")
+library(gsignal)
+library(stats)
+library(waveformtools)
+```
+```{r}
+df_art <- VitalDBR::load_case('SNUADC/ART', 1)
+df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+```
+
+
+```{r}
+start = 800 # Starter fra sekund 800
+sec = 100 # Varer 100 sekunder (800:900)
+```
+
+Subset AWP time series
+```{r}
+sub_awp <- VitalDBR::subset_data(df = df_awp, seconds = sec, start_sec = start)
+
+```
+
+Inspiration start \\ VitalDBR:: foran giver fejl object of type 'closure' is not subsettable
+```{r}
+insp <- get_inspiration_start(sub_awp)
+```
+
+
+```{r}
+sub_art <- VitalDBR::subset_data(df = df_art, seconds = sec, start_sec = start)
+```
+
+ABP beats
+```{r}
+beats <- waveformtools::find_abp_beats(sub_art)
+
+systolic <- beats$time_systole
+diastolic <- beats$time
+```
+
+```{r}
+par(mfrow=c(2,1))
+plot(sub_art$Time, sub_art$SNUADC.ART, type='l')
+for (x in systolic){
+  abline(v=x,col="blue")
+  
+}
+for (x in diastolic){
+  abline(v=x,col="red")
+  
+}
+
+
+plot(sub_awp$Time,sub_awp$Primus.AWP, type='l')
+for (x in insp){
+  abline(v=x,col="blue")
+}
+```
+
+
+
