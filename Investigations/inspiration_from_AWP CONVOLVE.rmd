@@ -12,6 +12,8 @@ install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 #install.packages("gsignal")
 library(gsignal)
+library(stats)
+library(waveformtools)
 ```
 
 Loading in data
@@ -25,8 +27,23 @@ df
 
 ```
 ```{r}
+plot(df, type="l")
+```
+```{r}
+#Dropper lige outlier detection
+#library("forecast")
+#y <- tsoutliers(ts(df$Primus.AWP), iterate = 2, lambda = "auto")
+#df[y$index,2] = y$replacements
+
+```
+```{r}
+plot(df, type='l')
+```
+
+
+```{r}
 sek <- 100
-start <- 597000
+start <- 557000
 sub<- df[start:(start+(sek*62.5)),] #  10 sekunder fra 10000 (cirka 625 observationer)
 #sub <- filter_signal(sub, 25,2,300) # Burde være 62.5 istedet for 1000, men der sker ikke rigtig noget med waveformen
 #par(mfrow=c(1,2))
@@ -35,6 +52,28 @@ plot(sub$Time, sub$Primus.AWP, type='l')
 
 
 ```
+```{r}
+#sub$Primus.AWP
+conv1 <- data.frame(as.matrix(stats::filter(x = sub$Primus.AWP, filter= c(1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1), method="convolution")))
+conv1 <- cbind(conv1,sub$Time)
+conv1 <- conv1[, c(2,1)]
+names(conv1)[1] <- "Time"
+names(conv1)[2] <- "Values"
+peaks <- gsignal::findpeaks(conv1$Values, DoubleSided = TRUE)
+peaks <- conv1$Time[peaks$loc]
+par(mfrow=c(2,1))
+plot(conv1$Time, conv1$Values, type='l')
+plot(sub$Time,sub$Primus.AWP, type='l')
+
+
+```
+
+
+
+
+
+
+
 
 ```{r}
 
@@ -44,10 +83,9 @@ conv1 <- cbind(conv1,sub$Time)
 conv1 <- conv1[, c(2,1)]
 names(conv1)[1] <- "Time"
 names(conv1)[2] <- "Values"
+conv1$Values
 peaks <- gsignal::findpeaks(conv1$Values)
-conv1
 peaks <- conv1$Time[peaks$loc]
-peaks
 par(mfrow=c(2,1))
 plot(conv1$Time, conv1$Values, type='l')
 for (x in peaks){
