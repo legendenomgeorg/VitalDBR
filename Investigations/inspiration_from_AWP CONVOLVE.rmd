@@ -5,6 +5,11 @@ date: "4/19/2022"
 output: html_document
 ---
 
+```{r}
+remotes::install_github("https://github.com/JohannesNE/waveformtools")
+```
+
+
 Importing VitalDBR
 ```{r}
 library(devtools)

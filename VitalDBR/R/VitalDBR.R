@@ -59,7 +59,43 @@ load_case <- function(tname, caseid){
 }
 
 
+#' Function for finding inspiration starts
+#' @export
+#' @param df Dataframe with AWP
+get_inspiration_start <- function(df) {
+  n = 8
+  before <- rep(1, n)
+  after <- rep(-1, n)
+  
+  my_filter <- c(before, 0, after)
+  my_filter
+  conv1 <- data.frame(as.matrix(stats::filter(x = sub$Primus.AWP, filter= my_filter, sides=1, method="convolution")))
+  conv1 <- cbind(conv1,sub$Time)
+  
+  conv1 <- conv1[, c(2,1)]
+  names(conv1)[1] <- "Time"
+  names(conv1)[2] <- "Values"
+  conv1 <- waveformtools::filter_signal(conv1, 25, 1500, signal_col = 2)
+  ins_start <- waveformtools::find_peaks(conv1$Values_filt,m=100, na.ignore=TRUE)
+  ins_start <- conv1$Time[ins_start]
+  ins_start <- ins_start[2:(length(ins_start)-1)] # removing the first and last peak since it is not representative
+  return(ins_start)
+}
+
+#' Function for subsetting AWP data
+#' @export
+#' @param df
+#' @param start_sec
+#' @param seconds
+subset_data <- function(df, seconds, start_sec){
+  hz <- 1 / df[1,1]
+  start <- start_sec*hz
+  df <- df[start:(start+(seconds*hz)),]
+  rownames(df) <- NULL
+  return(df)
+}
+
 
 df <- load_case('SNUADC/ART', 1)
-View(df)
+
 

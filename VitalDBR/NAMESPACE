@@ -2,6 +2,8 @@
 
 export(check_hz)
 export(fix_hz_index)
+export(get_inspiration_start)
 export(load_VDB)
 export(load_case)
 export(load_trk)
+export(subset_data)
