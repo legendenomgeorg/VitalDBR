@@ -6,34 +6,29 @@ output: html_document
 ---
 
 ```{r}
-remotes::install_github("https://github.com/JohannesNE/waveformtools")
+#remotes::install_github("https://github.com/JohannesNE/waveformtools")
 ```
 
 
 Importing VitalDBR
 ```{r}
-library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
-library(VitalDBR)
-#install.packages("gsignal")
-library(gsignal)
-library(stats)
+ibrary(stats)
 library(waveformtools)
 ```
 
 Loading in data
 ```{r}
 df <- load_case('Primus/AWP', 1)
-
 ```
 
 ```{r}
 df
-
 ```
+
 ```{r}
 plot(df, type="l")
 ```
+
 ```{r}
 #Dropper lige outlier detection
 #library("forecast")
@@ -41,6 +36,7 @@ plot(df, type="l")
 #df[y$index,2] = y$replacements
 
 ```
+
 ```{r}
 plot(df, type='l')
 ```
@@ -57,6 +53,7 @@ plot(sub$Time, sub$Primus.AWP, type='l')
 
 
 ```
+
 ```{r}
 #sub$Primus.AWP
 n = 6
@@ -64,7 +61,7 @@ before <- rep(1, n)
 after <- rep(-1, n)
 
 my_filter <- c(before, 0, after)
-my_filter
+#my_filter
 conv1 <- data.frame(as.matrix(stats::filter(x = sub$Primus.AWP, filter= my_filter, sides=1, method="convolution")))
 conv1 <- cbind(conv1,sub$Time)
 

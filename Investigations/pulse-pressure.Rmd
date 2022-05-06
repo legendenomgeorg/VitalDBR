@@ -13,6 +13,7 @@ library(gsignal)
 library(stats)
 library(waveformtools)
 ```
+
 ```{r}
 df_art <- VitalDBR::load_case('SNUADC/ART', 1)
 df_awp <- VitalDBR::load_case('Primus/AWP', 1)
@@ -20,24 +21,46 @@ df_awp <- VitalDBR::load_case('Primus/AWP', 1)
 
 
 ```{r}
-start = 800 # Starter fra sekund 800
-sec = 100 # Varer 100 sekunder (800:900)
+start = 10000 # Starter fra sekund 800
+sec = 40 # Varer 100 sekunder (800:900)
 ```
 
 Subset AWP time series
 ```{r}
 sub_awp <- VitalDBR::subset_data(df = df_awp, seconds = sec, start_sec = start)
 
+plot(sub_awp$Time, sub_awp$Primus.AWP, type='l')
 ```
 
 Inspiration start \\ VitalDBR:: foran giver fejl object of type 'closure' is not subsettable
 ```{r}
-insp <- get_inspiration_start(sub_awp)
+# ins_start <- get_inspiration_start(sub_awp)
+
+# code from get_insp_start() modified with name sub_awp
+
+n = 8
+before <- rep(1, n)
+after <- rep(-1, n)
+my_filter <- c(before, 0, after)
+conv1 <- data.frame(as.matrix(stats::filter(x = sub_awp$Primus.AWP, 
+    filter = my_filter, sides = 1, method = "convolution")))
+conv1 <- cbind(conv1, sub_awp$Time)
+conv1 <- conv1[, c(2, 1)]
+names(conv1)[1] <- "Time"
+names(conv1)[2] <- "Values"
+conv1 <- waveformtools::filter_signal(conv1, 25, 1500, signal_col = 2)
+ins_start <- waveformtools::find_peaks(conv1$Values_filt, 
+    m = 100, na.ignore = TRUE)
+ins_start <- conv1$Time[ins_start]
+ins_start <- ins_start[2:(length(ins_start) - 1)]
+
 ```
 
 
 ```{r}
 sub_art <- VitalDBR::subset_data(df = df_art, seconds = sec, start_sec = start)
+
+plot(sub_art$Time, sub_art$SNUADC.ART, type='l')
 ```
 
 ABP beats
@@ -62,10 +85,60 @@ for (x in diastolic){
 
 
 plot(sub_awp$Time,sub_awp$Primus.AWP, type='l')
-for (x in insp){
+for (x in ins_start){
   abline(v=x,col="blue")
 }
 ```
+
+```{r}
+# crude plot of Pulse Pressure
+
+plot(beats$time, beats$PP, type='l')
+#mov_avg <- rep(1/9, 9)
+#PP_mov_avg <- filter(beats$PP, mov_avg)
+#plot(beats$time, PP_mov_avg, type='l')
+```
+
+```{r}
+# simple average func test (virker ikke bare som sig selv - vi skal have filtreret dataen)
+
+test_time <- beats$time[6:51]
+test_PP <- vector(length = 46)
+for (i in c(6:51)){
+  test_PP[i-5] <- sum(rep(1/11, 11) * beats$PP[(i-5):(i+5)])
+}
+
+plot(test_time, test_PP, type='l')
+```
+
+
+```{r}
+# cheating (fjern alle værdier <15, da det virker til at være den slags støj vi finder mest her)
+test_time <- beats$time
+test_PP <- beats$PP
+
+while (test_PP[1] < 15) {
+  test_time <- test_time[2:length(test_time)]
+  test_PP <- test_PP[2:length(test_PP)]
+}
+
+while (min(test_PP, na.rm = TRUE) < 15) {
+  idx <- which.min(test_PP)
+  test_time <- c(test_time[1:(idx-1)], test_time[(idx+1):length(test_time)])
+  test_PP <- c(test_PP[1:(idx-1)], test_PP[(idx+1):length(test_PP)])
+}
+
+plot(test_time, test_PP, type='l')
+points(test_time, test_PP, pch = 16, col='black')
+abline(v = ins_start, col='red')
+```
+
+```{r}
+# FRED COMM: Det virker til at der er lidt delay på PP / ins_start kommer for tidligt.
+# Vi ville ellers "gerne se" at ins_start kommer samtidig med stigning i PP, men den kommer mest før
+```
+
+
 
 
 
