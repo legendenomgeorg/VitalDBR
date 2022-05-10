@@ -68,16 +68,16 @@ get_inspiration_start <- function(df) {
   after <- rep(-1, n)
   
   my_filter <- c(before, 0, after)
-  conv1 <- data.frame(stats::filter(x = df[,2],
+  convolution <- data.frame(stats::filter(x = df[,2],
               filter= my_filter, sides=1, method="convolution"))
-  conv1 <- cbind(conv1,df$Time)
+  convolution <- cbind(convolution,df[,1])
   
-  conv1 <- conv1[, c(2,1)]
-  names(conv1)[1] <- "Time"
-  names(conv1)[2] <- "Values"
-  conv1 <- waveformtools::filter_signal(conv1, 25, 1500, signal_col = 2)
-  ins_start <- waveformtools::find_peaks(conv1$Values_filt,m=100, na.ignore=TRUE)
-  ins_start <- conv1$Time[ins_start]
+  convolution <- convolution[, c(2,1)]
+  names(convolution)[1] <- "Time"
+  names(convolution)[2] <- "Values"
+  convolution <- waveformtools::filter_signal(convolution, 25, 1500, signal_col = 2)
+  ins_start <- waveformtools::find_peaks(convolution$Values_filt,m=100, na.ignore=TRUE)
+  ins_start <- convolution$Time[ins_start]
   #ins_start <- ins_start[2:(length(ins_start)-1)] # removing the first and last peak since it is not representative
   return(ins_start)
 }
