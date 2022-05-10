@@ -63,8 +63,7 @@ load_case <- function(tname, caseid){
 #' @export
 #' @param df Dataframe with AWP
 get_inspiration_start <- function(df) {
-  freq <- 1/(df[2,1]-df[1,1])
-  df <- waveformtools::filter_signal(df, 25, sample_rate = freq, signal_col = 2) # 25 is domain knowledge
+  
   n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
@@ -91,7 +90,11 @@ get_inspiration_start <- function(df) {
 #' @param df
 #' @param start_sec
 #' @param seconds
-subset_data <- function(df, seconds, start_sec){
+subset_data <- function(df, seconds, start_sec, filter=FALSE, cut_freq=25 ){
+  if (isTRUE(filter)){
+    freq <- 1/(df[2,1]-df[1,1])
+    df <- waveformtools::filter_signal(df, cut_freq, sample_rate = freq, signal_col = 2) # 25 is domain knowledge
+  }
   hz <- 1 / df[1,1]
   start <- start_sec*hz
   df <- df[start:(start+(seconds*hz)),]
