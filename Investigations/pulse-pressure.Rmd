@@ -15,13 +15,13 @@ library(waveformtools)
 ```
 
 ```{r}
-df_art <- VitalDBR::load_case('SNUADC/ART', 1)
-df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+#df_art <- VitalDBR::load_case('SNUADC/ART', 1)
+#df_awp <- VitalDBR::load_case('Primus/AWP', 1)
 ```
 
 
 ```{r}
-start = 10000 # Starter fra sekund 800
+start = 8000 # Starter fra sekund 800
 sec = 40 # Varer 100 sekunder (800:900)
 ```
 
@@ -59,16 +59,23 @@ ins_start <- ins_start[2:(length(ins_start) - 1)]
 
 ```{r}
 sub_art <- VitalDBR::subset_data(df = df_art, seconds = sec, start_sec = start)
+sub_art <- waveformtools::filter_signal(sub_art, 25, sample_rate = 500, signal_col = 2)
+waveformtools::dygraph_signal(sub_art, SNUADC.ART, SNUADC.ART_filt
+                              )
 
 plot(sub_art$Time, sub_art$SNUADC.ART, type='l')
 ```
 
 ABP beats
 ```{r}
-beats <- waveformtools::find_abp_beats(sub_art)
-
+beats <- waveformtools::find_abp_beats(sub_art,3,1)
+beats
 systolic <- beats$time_systole
 diastolic <- beats$time
+
+waveformtools::add_time_since_event(beats, time_event = ins_start)
+
+# ann_rel_index starter forfra ved hver inspiration. 
 ```
 
 ```{r}
@@ -131,6 +138,9 @@ while (min(test_PP, na.rm = TRUE) < 15) {
 plot(test_time, test_PP, type='l')
 points(test_time, test_PP, pch = 16, col='black')
 abline(v = ins_start, col='red')
+
+#GAM plot uden inspiration
+waveformtools::PP_gam_analysis(beats, return_GAM = TRUE)|>  gratia::draw()
 ```
 
 ```{r}
