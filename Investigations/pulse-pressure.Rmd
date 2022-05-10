@@ -15,14 +15,14 @@ library(waveformtools)
 ```
 
 ```{r}
-#df_art <- VitalDBR::load_case('SNUADC/ART', 1)
-#df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+df_art <- VitalDBR::load_case('SNUADC/ART', 1)
+df_awp <- VitalDBR::load_case('Primus/AWP', 1)
 ```
 
 
 ```{r}
-start = 8000 # Starter fra sekund 800
-sec = 40 # Varer 100 sekunder (800:900)
+start = 8000 # Starter fra sekund "start"
+sec = 40 # Varer "sec" sekunder 
 ```
 
 Subset AWP time series
@@ -32,9 +32,14 @@ sub_awp <- VitalDBR::subset_data(df = df_awp, seconds = sec, start_sec = start)
 plot(sub_awp$Time, sub_awp$Primus.AWP, type='l')
 ```
 
+
+```{r}
+ins_start <- get_inspiration_start(sub_awp)
+```
+
 Inspiration start \\ VitalDBR:: foran giver fejl object of type 'closure' is not subsettable
 ```{r}
-# ins_start <- get_inspiration_start(sub_awp)
+
 
 # code from get_insp_start() modified with name sub_awp
 
@@ -55,6 +60,7 @@ ins_start <- conv1$Time[ins_start]
 ins_start <- ins_start[2:(length(ins_start) - 1)]
 
 ```
+
 
 
 ```{r}
