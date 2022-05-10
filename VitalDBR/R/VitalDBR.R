@@ -68,8 +68,8 @@ get_inspiration_start <- function(df) {
   after <- rep(-1, n)
   
   my_filter <- c(before, 0, after)
-  conv1 <- data.frame(as.matrix(stats::filter(x = df[,2],
-              filter= my_filter, sides=1, method="convolution")))
+  conv1 <- data.frame(stats::filter(x = df[,2],
+              filter= my_filter, sides=1, method="convolution"))
   conv1 <- cbind(conv1,df$Time)
   
   conv1 <- conv1[, c(2,1)]
