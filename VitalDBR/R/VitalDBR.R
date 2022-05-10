@@ -62,14 +62,14 @@ load_case <- function(tname, caseid){
 #' Function for finding inspiration starts
 #' @export
 #' @param df Dataframe with AWP
-get_inspiration_start <- function(df) {
+get_inspiration_start <- function(df, data_column=2) {
   
   n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
   
   my_filter <- c(before, 0, after)
-  convolution <- data.frame(stats::filter(x = df[,3],
+  convolution <- data.frame(stats::filter(x = df[,data_column],
               filter= my_filter, sides=1, method="convolution"))
   convolution <- cbind(convolution,df[,1])
   
