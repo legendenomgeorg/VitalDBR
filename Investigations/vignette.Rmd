@@ -8,7 +8,6 @@ output: html_document
 library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
-#install.packages("gsignal")
 library(stats)
 library(waveformtools)
 library(ggplot2)
@@ -17,8 +16,8 @@ library(dplyr)
 ```
 
 ```{r}
-#df_art <- VitalDBR::load_case('SNUADC/ART', 1)
-#df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+df_art <- VitalDBR::load_case('SNUADC/ART', 1)
+df_awp <- VitalDBR::load_case('Primus/AWP', 1)
 ```
 
 
@@ -245,6 +244,32 @@ geom_vline(aes(xintercept = PPV_95, color = "95% confidence interval"),
 data = data.frame()) +
 scale_x_continuous(labels = scales::label_percent())
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
