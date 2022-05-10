@@ -28,7 +28,7 @@ sec = 30 # Varer "sec" sekunder
 
 Subset AWP time series
 ```{r}
-sub_awp <- VitalDBR::subset_data(df = df_awp, seconds = sec, start_sec = start)
+sub_awp <- VitalDBR::subset_data(data = df_awp, seconds = sec, start_sec = start)
 sub_awp
 plot(sub_awp$Time, sub_awp$Primus.AWP, type='l')
 ```
@@ -41,7 +41,7 @@ insp_start
 
 
 ```{r}
-sub_art <- VitalDBR::subset_data(df = df_art, seconds = sec, start_sec = start, filter=TRUE)
+sub_art <- VitalDBR::subset_data(data = df_art, seconds = sec, start_sec = start, filter=TRUE)
 waveformtools::dygraph_signal(sub_art, SNUADC.ART, SNUADC.ART_filt)
 
 ```
@@ -246,6 +246,8 @@ scale_x_continuous(labels = scales::label_percent())
 ```
 
 
+
+##### Moving gam
 
 
 
