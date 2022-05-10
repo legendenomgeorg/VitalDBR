@@ -9,20 +9,20 @@ library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 #install.packages("gsignal")
-library(gsignal)
 library(stats)
 library(waveformtools)
+library(ggplot2)
 ```
 
 ```{r}
-df_art <- VitalDBR::load_case('SNUADC/ART', 1)
-df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+#df_art <- VitalDBR::load_case('SNUADC/ART', 1)
+#df_awp <- VitalDBR::load_case('Primus/AWP', 1)
 ```
 
 
 ```{r}
 start = 8000 # Starter fra sekund "start"
-sec = 40 # Varer "sec" sekunder 
+sec = 20 # Varer "sec" sekunder 
 ```
 
 Subset AWP time series
@@ -34,65 +34,18 @@ plot(sub_awp$Time, sub_awp$Primus.AWP, type='l')
 
 
 ```{r}
-sub_awp
-ins_start <- get_inspiration_start(sub_awp)
+insp_start <- get_inspiration_start(sub_awp)
+insp_start
 ```
-```{r}
-test_func <- function(df) {
-  n = 8
-  before <- rep(1, n)
-  after <- rep(-1, n)
-  
-  my_filter <- c(before, 0, after)
-  conv1 <- data.frame(stats::filter(x = df[,2],
-              filter= my_filter, sides=1, method="convolution"))
-  conv1 <- cbind(conv1,df[,1])
-  
-  conv1 <- conv1[, c(2,1)]
-  names(conv1)[1] <- "Time"
-  names(conv1)[2] <- "Values"
-  conv1 <- waveformtools::filter_signal(conv1, 25, 1500, signal_col = 2)
-  ins_start <- waveformtools::find_peaks(conv1$Values_filt,m=100, na.ignore=TRUE)
-  ins_start <- conv1$Time[ins_start]
-  #ins_start <- ins_start[2:(length(ins_start)-1)] # removing the first and last peak since it is not representative
-  return(ins_start)
-}
-test_func(sub_awp)
-```
-
-Inspiration start \\ VitalDBR:: foran giver fejl object of type 'closure' is not subsettable
-```{r}
-
-
-# code from get_insp_start() modified with name sub_awp
-
-n = 8
-before <- rep(1, n)
-after <- rep(-1, n)
-my_filter <- c(before, 0, after)
-conv1 <- data.frame(as.matrix(stats::filter(x = sub_awp$Primus.AWP, 
-    filter = my_filter, sides = 1, method = "convolution")))
-conv1 <- cbind(conv1, sub_awp$Time)
-conv1 <- conv1[, c(2, 1)]
-names(conv1)[1] <- "Time"
-names(conv1)[2] <- "Values"
-conv1 <- waveformtools::filter_signal(conv1, 25, 1500, signal_col = 2)
-ins_start <- waveformtools::find_peaks(conv1$Values_filt, 
-    m = 100, na.ignore = TRUE)
-ins_start <- conv1$Time[ins_start]
-ins_start <- ins_start[2:(length(ins_start) - 1)]
-
-```
-
 
 
 ```{r}
 sub_art <- VitalDBR::subset_data(df = df_art, seconds = sec, start_sec = start)
-sub_art <- waveformtools::filter_signal(sub_art, 25, sample_rate = 500, signal_col = 2)
-waveformtools::dygraph_signal(sub_art, SNUADC.ART, SNUADC.ART_filt
-                              )
+waveformtools::dygraph_signal(sub_art, SNUADC.ART, SNUADC.ART_filt)
 
-plot(sub_art$Time, sub_art$SNUADC.ART, type='l')
+```
+```{r}
+sub_art
 ```
 
 ABP beats
@@ -102,28 +55,17 @@ beats
 systolic <- beats$time_systole
 diastolic <- beats$time
 
-waveformtools::add_time_since_event(beats, time_event = ins_start)
+waveformtools::add_time_since_event(beats, time_event = insp_start$time)
 
 # ann_rel_index starter forfra ved hver inspiration. 
 ```
 
 ```{r}
-par(mfrow=c(2,1))
-plot(sub_art$Time, sub_art$SNUADC.ART, type='l')
-for (x in systolic){
-  abline(v=x,col="blue")
-  
-}
-for (x in diastolic){
-  abline(v=x,col="red")
-  
-}
-
-
-plot(sub_awp$Time,sub_awp$Primus.AWP, type='l')
-for (x in ins_start){
-  abline(v=x,col="blue")
-}
+abp_plot <- ggplot(sub_art, aes(Time, SNUADC.ART_filt)) +
+geom_line() +
+geom_vline(aes(xintercept = time), color = "red",
+data = insp_start)
+abp_plot
 ```
 
 ```{r}
@@ -134,6 +76,20 @@ plot(beats$time, beats$PP, type='l')
 #PP_mov_avg <- filter(beats$PP, mov_avg)
 #plot(beats$time, PP_mov_avg, type='l')
 ```
+
+```{r}
+abp_plot +
+  geom_point(aes(x = time,
+    y = dia,
+    colour = "diastole"),
+    data = beats) +
+  geom_point(aes(x = time_systole,
+    y = sys,
+    colour = "systole"),
+    data = beats)
+```
+
+
 
 ```{r}
 # simple average func test (virker ikke bare som sig selv - vi skal have filtreret dataen)

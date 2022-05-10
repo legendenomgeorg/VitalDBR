@@ -63,23 +63,27 @@ load_case <- function(tname, caseid){
 #' @export
 #' @param df Dataframe with AWP
 get_inspiration_start <- function(df) {
+  freq <- 1/(df[2,1]-df[1,1])
+  df <- waveformtools::filter_signal(df, 25, sample_rate = freq, signal_col = 2) # 25 is domain knowledge
   n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
   
   my_filter <- c(before, 0, after)
-  convolution <- data.frame(stats::filter(x = df[,2],
+  convolution <- data.frame(stats::filter(x = df[,3],
               filter= my_filter, sides=1, method="convolution"))
   convolution <- cbind(convolution,df[,1])
   
   convolution <- convolution[, c(2,1)]
-  names(convolution)[1] <- "Time"
-  names(convolution)[2] <- "Values"
+  names(convolution)[1] <- "time"
+  names(convolution)[2] <- "values"
   convolution <- waveformtools::filter_signal(convolution, 25, 1500, signal_col = 2)
-  ins_start <- waveformtools::find_peaks(convolution$Values_filt,m=100, na.ignore=TRUE)
-  ins_start <- convolution$Time[ins_start]
-  #ins_start <- ins_start[2:(length(ins_start)-1)] # removing the first and last peak since it is not representative
-  return(ins_start)
+  insp_start <- waveformtools::find_peaks(convolution$values_filt,m=100, na.ignore=TRUE)
+  insp_start <- convolution$time[insp_start]
+  #insp_start <- insp_start[2:(length(insp_start)-1)] # removing the first and last peak since it is not representative
+  insp_start <- data.frame(insp_start)
+  names(insp_start)[1] <- "time"
+  return(insp_start)
 }
 
 #' Function for subsetting AWP data
