@@ -18,20 +18,20 @@ fix_hz_index <- function(x,freq) {
 
 #' Checks whether we are importing something that is measured in hz. If it is, it changes the row names to reflect the frequency
 #' @export
-#' @param df The dataframe we want to check. If
-check_hz <- function(df){
-  if (is.na(df[1,2]) & is.na(df[2,2] & !is.na(df[1,1]) & !is.na(df[2,1]) )){
-    freq = df[2,1]
-    df <- subset (df, select = -Time)
-    df<- na.omit(df)
-    df <- cbind(df,"Time"=1:nrow(df)*freq)
-    df <- df[, c(2,1)] # reorder columns'
-    rownames(df) <- NULL
-    return(df)
+#' @param data The dataframe we want to check. If
+check_hz <- function(data){
+  if (is.na(data[1,2]) & is.na(data[2,2] & !is.na(data[1,1]) & !is.na(data[2,1]) )){
+    freq = data[2,1]
+    data <- subset (data, select = -Time)
+    data<- na.omit(data)
+    data <- cbind(data,"Time"=1:nrow(data)*freq)
+    data <- data[, c(2,1)] # reorder columns'
+    rownames(data) <- NULL
+    return(data)
   }
   else {
-    rownames(df) <- NULL
-    return(df)
+    rownames(data) <- NULL
+    return(data)
   }
 }
 
@@ -43,8 +43,8 @@ load_trk <- function(tid){
   end <- ".csv.gz"
   # start + tid + end
   url <- paste(start, tid, end, sep="")
-  df = load_VDB(url)
-  return(check_hz(df))
+  data = load_VDB(url)
+  return(check_hz(data))
 }
 
 #' Main function for loading in data
@@ -61,17 +61,17 @@ load_case <- function(tname, caseid){
 
 #' Function for finding inspiration starts
 #' @export
-#' @param df Dataframe with AWP
-get_inspiration_start <- function(df, data_column=2) {
+#' @param data Dataframe with AWP
+get_inspiration_start <- function(data, data_column=2) {
   
   n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
   
   my_filter <- c(before, 0, after)
-  convolution <- data.frame(stats::filter(x = df[,data_column],
+  convolution <- data.frame(stats::filter(x = data[,data_column],
               filter= my_filter, sides=1, method="convolution"))
-  convolution <- cbind(convolution,df[,1])
+  convolution <- cbind(convolution,data[,1])
   
   convolution <- convolution[, c(2,1)]
   names(convolution)[1] <- "time"
@@ -87,18 +87,18 @@ get_inspiration_start <- function(df, data_column=2) {
 
 #' Function for subsetting AWP data
 #' @export
-#' @param df
+#' @param data
 #' @param start_sec
 #' @param seconds
-subset_data <- function(df, seconds, start_sec, filter=FALSE, cut_freq=25 ){
-  hz <- 1/(df[2,1]-df[1,1])
+subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
+  hz <- 1/(data[2,1]-data[1,1])
   if (isTRUE(filter)){
-    df <- waveformtools::filter_signal(df, cut_freq, sample_rate = hz, signal_col = 2) # 25 is domain knowledge
+    data <- waveformtools::filter_signal(data, cut_freq, sample_rate = hz, signal_col = 2) # 25 is domain knowledge
   }
   start <- start_sec*hz
-  df <- df[start:(start+(seconds*hz)),]
-  rownames(df) <- NULL
-  return(df)
+  data <- data[start:(start+(seconds*hz)),]
+  rownames(data) <- NULL
+  return(data)
 }
 
 
