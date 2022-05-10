@@ -13,6 +13,7 @@ library(stats)
 library(waveformtools)
 library(ggplot2)
 library(mgcv)
+library(dplyr)
 ```
 
 ```{r}
@@ -146,7 +147,7 @@ bs = "cr" # The basis is a natural cubic spline.
 # If only two knots are specified for a cyclic spline, these will
 # set the positions of the limiting knot(s). The remaining knots will
 # be positioned automatically (at quantiles).
-knots = list(insp_rel_index = c(0,1)),
+knots = list(ann_rel_index = c(0,1)),
 # We use restricted maximum likelihood (REML) to fit the optimal smoothing parameter.
 # This is often the best choice, but not the default.
 method = "REML",
@@ -162,7 +163,89 @@ residuals = TRUE)
 
 ```{r}
 coef(PP_gam)[1] # intercept
+
+
+
 ```
+
+
+
+```{r}
+PP_pred <- mutate(PP_data, pred = predict(PP_gam, PP_data ))
+ggplot(PP_pred, aes(x=time)) +
+geom_line(aes(y=PP, color = "Observed")) +
+geom_point(aes(y=PP, color = "Observed")) +
+geom_point(aes(y=pred, color = "Predicted"))
+```
+
+
+
+```{r}
+
+PP_newdata <- tibble(
+# create 200 points from start to endto get a smooth line
+time = seq(start, sec+start, length.out = 200)) %>% 
+# index each new time to our existing vector of inspiration times
+add_time_since_event(insp_start$time, prefix = "ann") %>%
+na.omit()
+PP_interpolate <- bind_cols(
+PP_newdata,
+predict(PP_gam,
+newdata = PP_newdata,
+# in addition to the predictions (fit) also return the standard error
+# (se.fit) for each prediction. This makes predict return a named list,
+# that we can simply bind to our data frame.
+se.fit = TRUE)
+)
+ggplot(PP_interpolate, aes(x=time)) +
+geom_ribbon(aes(ymin = fit - 1.96*se.fit,
+ymax = fit + 1.96*se.fit,
+fill = "Predicted (95% CI)")) +
+geom_line(aes(y = fit)) +
+geom_point(aes(y=PP, color = "Observed"), data = PP_data) +
+scale_fill_manual(values = "skyblue")
+```
+
+
+```{r}
+insp_rel_index_smooth <- gratia::smooth_estimates(PP_gam,
+smooth = "s(ann_rel_index)",
+n=100)
+min_PP <- min(insp_rel_index_smooth$est)
+max_PP <- max(insp_rel_index_smooth$est)
+intercept_PP <- coef(PP_gam)[1]
+PPV_est <- (max_PP - min_PP) / intercept_PP
+sprintf("PPV is %.1f%%", PPV_est*100)
+```
+
+```{r}
+set.seed(1)
+insp_smooth_samples <- gratia::smooth_samples(PP_gam, term = "s(ann_rel_index)", n = 5000)
+ggplot(insp_smooth_samples %>% filter(draw <= 50), aes(.x1, value, group = draw)) +
+geom_line(alpha = 0.1) +
+labs(x="ann_rel_index")
+```
+
+```{r}
+# A function that returns PPV given a smooth and an intercept
+calc_PPV <- function(smooth, intercept) {
+  min_PP <- min(smooth)
+  max_PP <- max(smooth)
+  (max_PP - min_PP) / unname(intercept)
+}
+PPV_samples <- insp_smooth_samples$value %>%
+  split(insp_smooth_samples$draw) %>%
+  sapply(calc_PPV, intercept = coef(PP_gam)[1])
+  PPV_95 <- quantile(PPV_samples, probs = c(0.025, 0.975))
+ggplot(data.frame(PPV = PPV_samples), aes(x=PPV)) +
+geom_histogram(bins=30) +
+geom_vline(aes(xintercept = PPV_est, color = "Estimate"),
+data = data.frame()) +
+geom_vline(aes(xintercept = PPV_95, color = "95% confidence interval"),
+data = data.frame()) +
+scale_x_continuous(labels = scales::label_percent())
+```
+
 
 
 
