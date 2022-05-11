@@ -16,8 +16,8 @@ library(dplyr)
 ```
 
 ```{r}
-df_art <- VitalDBR::load_case('SNUADC/ART', 1)
-df_awp <- VitalDBR::load_case('Primus/AWP', 1)
+data_art <- VitalDBR::load_case('SNUADC/ART', 1)
+data_awp <- VitalDBR::load_case('Primus/AWP', 1)
 ```
 
 
@@ -28,7 +28,7 @@ sec = 30 # Varer "sec" sekunder
 
 Subset AWP time series
 ```{r}
-sub_awp <- VitalDBR::subset_data(data = df_awp, seconds = sec, start_sec = start)
+sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
 sub_awp
 plot(sub_awp$Time, sub_awp$Primus.AWP, type='l')
 ```
@@ -41,7 +41,7 @@ insp_start
 
 
 ```{r}
-sub_art <- VitalDBR::subset_data(data = df_art, seconds = sec, start_sec = start, filter=TRUE)
+sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE)
 waveformtools::dygraph_signal(sub_art, SNUADC.ART, SNUADC.ART_filt)
 
 ```
@@ -51,6 +51,12 @@ ABP beats
 beats <- waveformtools::find_abp_beats(sub_art,3,1)[-1,] #skipper lige første row, fordi der ikke er noget pp værdi der
 
 ```
+
+
+# Johannes plots
+
+
+
 
 ```{r}
 abp_plot <- ggplot(sub_art, aes(Time, SNUADC.ART_filt)) +
@@ -163,7 +169,7 @@ residuals = TRUE)
 ```{r}
 coef(PP_gam)[1] # intercept
 
-
+coef(PP_gam)
 
 ```
 
@@ -247,7 +253,62 @@ scale_x_continuous(labels = scales::label_percent())
 
 
 
-##### Moving gam
+# Udforsk betydningen af outcomes:
+Det vi gerne vil nu, er at undersøge betydningen af pulsstrykvariationen på patienters 30 dages mortalitet. Derfor skal vi lave en logistisk regression der ser sådan her ud
+$$ mortality_i \sim PPV\_thresh_i,art\_mbp_i, Age_i, Sex_i, Asa_i, Eme\_ope_i, BMI_i$$
+Derfor skal vi bruge et datasæt der ser sådan her ud:
+
+```{r}
+Case <- c(29,600,1009,1900)
+mortality <- c(0,1,1,0)
+PPV_thresh <- c(8,9,6,10)
+ART_MBP <- c(54,65,69,70)
+Age <- c(22,47,87,4)
+Sex <- c(1,0,0,1)
+Asa <- c(6,4,1,4)
+Eme_ope <- c(1,0,0,1) #emergency operation
+BMI <- c(32,16,29,15)
+data.frame(Case, mortality,PPV_thresh, ART_MBP, Age, Sex, Asa, Eme_ope, BMI)
+```
+
+Forklaringer:
+Case:
+- Case skal sorteres således at vi kun finder de operationer der er af typen: "open", "general surgery" og "general Anathesia". Dette kræver en udvidet load funktion. Der burde være lidt under 3000 observationer
+
+PPV_thresh:
+- Hvis det så er 180 minutter skal vi fitte 180 gams og udtrække de 180 pulstryk variationer (som er den der amplitude/gennemsnit for pulstryk). Vi vil gerne vide hvor meget af tiden PPV ligger uden for intervallet (6,12) (domain knowledge). Der er lidt forskellige måder dette kan laves på. Men det skal ende ud i enten et samlet tal, eller måske to kolonner med andel af PPV_high, PPV_low.
+- Vi kan dnytte "anestart" og "aneend" fra clinical information API'en til kun at vælge det interval af operationen hvor patienten er i narkose.
+
+ART_MBP (lav prioritet) :
+- ART_MBP (mean arterial pressure) er faktisk en del af SOLAR8000, så måske skal vi også begrænse vores cases til det?
+- Vi er intereserede i hvor ofte ART_MBP ligger under 65 (domain knowledge), så vi skal bare finde andelen af værdierne i ART_MBP under 65
+
+Age, sex, asa, Eme_ops og BMI:
+- Disse punkter er bare nogle confounders vi skal have med, de ligger i clinical information API'en
+
+
+Konkrete opgaver (prioriteret):
+1. Opgrader load funktion så den kan loade ud fra kriterier i clinical information API 
+- Høj prioritet. Tror jeg (Georg) tager den da jeg har skrevet det meste af load funktionaliteten.
+
+2.Lav en funktion der tager et langt x antal minutter og outputter x PPV-værdier
+- Høj prioritet
+
+3. Lav funktion, der får et case ID og henter: Age, sex, asa, Eme_ops og BMI
+- (Mellem prioritet) Dette kræver ikke at opgave 1 er løst, så den kan en af jer bare tage
+
+4. Udvid subset funktionen så man kan passe at den kun skal kigge på intervallet mellem "anestart" og "aneend". '
+- (lav prioritet) Kræver måske at opgave 1 er løst, men ikke sikkert
+
+Generelt til udvikling:
+- Fra nu af uploader vi ikke flere funktioner til pakken, men vi holder dem i de dokumenter vi skriver i, så samler vi til sidst, så slipper vi for konstant at skulle pushe til master
+- Ville være bedst hvis vi stoppede med at pushe til master, men istedet havde hver vores branch vi arbejdede i og så mergede.
+- Lad os holde vignetten som den er nu, og så ellers lave et dokument for hver funktion man arbejder på, hvor man kopierer de ting man skal bruge fra vignetten ind. 
+
+
+Spørgsmål: 
+- Hvis vi skal bruge ART_MBP skal vi vel også restricte vores cases til dem der er optaget på SOLAR8000?
+- Skal vi definerer PPV udfra et tal eller to tal som beskrevet i beskrivelsen af PPV_thresh
 
 
 
@@ -272,12 +333,7 @@ scale_x_continuous(labels = scales::label_percent())
 
 
 
-
-
-
-
-
-##### Frederik
+# Frederik
 
 ```{r}
 # crude plot of Pulse Pressure

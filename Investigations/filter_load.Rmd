@@ -1,0 +1,92 @@
+---
+title: "filter_load"
+author: "Georg"
+date: "5/11/2022"
+output: html_document
+---
+
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+library("tidyverse")
+library(readr)
+```
+Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
+```{r}
+df <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
+      dplyr::filter(approach=="Open",
+                department=="General surgery",
+                ane_type=="General") %>%
+      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
+df
+```
+
+```{r}
+
+tmp <- VitalDBR::load_case("SNUADC/ART", 2258)
+mean(tmp[,2])
+```
+
+```{r}
+ppv <- function(case,art,awp){
+  # her skal vi udregne ppv, men lige nu lægger jeg bare gennemsnittene sammen
+  return(c(case, mean(na.omit(art[,2])) + mean(na.omit(awp[,2]) )))
+  #return(c(case, 3))
+}
+
+try_load <- function(track,i) {
+  data <-try(VitalDBR::load_case(track, i), TRUE)
+if(isTRUE(class(data)=="try-error")) 
+  {
+  return(TRUE) 
+  } 
+else 
+  { 
+    return(data)
+  } 
+}
+
+loop <- function(cases){
+  data <- data.frame(matrix(ncol=2,nrow=0))
+  for (case in cases){
+    art <- try_load("SNUADC/ART", case)
+    awp <- try_load("Primus/AWP", case)
+    if (isTRUE(art) | isTRUE(awp)){
+      return(NULL)
+    }
+    else{
+      data <- rbind(data, ppv(case,art,awp))
+    }
+  }
+  columns <- c("caseid", "PPV")
+  colnames(data) <- columns
+  return(data)
+}
+
+
+loop(c(1,10))
+
+```
+
+
+Der sker et eller andet her
+Error in readLines(con) : 
+  cannot open the connection to 'https://api.vitaldb.net/.csv.gz' 
+
+
+
+```{r}
+load_case("Primus/AWP", 10)
+```
+
+
+
+```{r}
+path <- getwd()
+filename = paste(path, 'df.csv',sep = '')
+write.csv(df, filename)
+```
+
+
+
