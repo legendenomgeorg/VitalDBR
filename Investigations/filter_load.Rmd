@@ -14,12 +14,12 @@ library(readr)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
-df <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
       dplyr::filter(approach=="Open",
                 department=="General surgery",
                 ane_type=="General") %>%
       dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
-df
+cases
 ```
 
 ```{r}
@@ -65,9 +65,33 @@ loop <- function(cases){
 }
 
 
-loop(c(1,10))
+#loop(c(1,10))
 
 ```
+Nå 3 min efter gik jeg havde sagt tak for i aften gik det op for mig at jeg kunne have gjort det meget mere simpelt. 
+- Find alle caseid's der lever op til de der conditions ligesom ovenfor
+- importer tracks med VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+- Find alle caseid's der har både Primus/AWP og SNUADC/ART. Og join de to tables. Så har man alle de case id'er vi skal finde
+```{r}
+tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
+    dplyr::filter(tname == "Primus/AWP" | tname == "SNUADC/ART") %>%
+    count(caseid) %>%
+    dplyr::filter(n == 2)
+
+
+```
+
+```{r}
+merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
+merged %>% dplyr::filter(death_inhosp==1)
+merged %>% dplyr::filter(icu_days>10)
+```
+
+
+```{r}
+merged
+```
+
 
 
 Der sker et eller andet her
