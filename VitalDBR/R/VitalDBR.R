@@ -42,7 +42,6 @@ load_trk <- function(tid){
   start <- "https://api.vitaldb.net/"
   end <- ".csv.gz"
   # start + tid + end
-  if (start = "cases"){}
   url <- paste(start, tid, end, sep="")
   data = load_VDB(url)
   return(check_hz(data))
