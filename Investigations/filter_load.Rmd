@@ -20,6 +20,7 @@ cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
                 ane_type=="General") %>%
       dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
 cases
+cases %>% 100
 ```
 
 ```{r}

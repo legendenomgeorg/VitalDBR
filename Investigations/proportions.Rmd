@@ -1,0 +1,71 @@
+---
+title: "Mængde"
+author: "Georg"
+date: "5/12/2022"
+output: pdf_document
+---
+```{r}
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR', force=TRUE)
+library(VitalDBR)
+library("tidyverse")
+library(readr)
+```
+
+
+Først har vi alle cases hvor de generelle ting er opfyldt:
+```{r}
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
+      dplyr::filter(approach=="Open",
+                department=="General surgery",
+                ane_type=="General") %>%
+      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
+head(cases)
+nrow(cases)
+```
+Der er cirka 2800 rows
+```{r}
+death <- cases %>% dplyr::filter(death_inhosp==1)
+head(death)
+nrow(death)
+```
+Og kun cirka 33 der er døde
+
+
+Derefter har vi alle hvor det kun er art
+
+```{r}
+only_art <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
+    dplyr::filter(tname == "SNUADC/ART")
+head(only_art)
+nrow(only_art)
+```
+
+Og her joinet på det originale table
+```{r}
+merged <- merge(x=only_art,y=cases,by="caseid")
+death_merged <- merged %>% dplyr::filter(death_inhosp==1) 
+head(death_merged)
+nrow(death_merged)
+```
+
+
+
+Hvor der både er awp og art
+```{r}
+both <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
+    dplyr::filter(tname == "Primus/AWP" | tname == "SNUADC/ART") %>%
+    count(caseid) %>%
+    dplyr::filter(n == 2)
+head(both)
+nrow(both)
+```
+
+Joinet på det originale og filtreret udfra om de er døde
+```{r}
+merged <- merge(x=both,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
+merged_both <- merged %>% dplyr::filter(death_inhosp==1)
+head(merged_both)
+nrow(merged_both)
+```
+
