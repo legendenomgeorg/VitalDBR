@@ -58,12 +58,24 @@ df<-load_case("Primus/AWP", 1)
 ```
 
 ```{r}
-df
-
+load_VDB <- function(file_url) {
+  con <- gzcon(url(file_url))
+  txt <- readLines(con)
+  return(read.csv(textConnection(txt)))
+}
 ```
 
 
 ```{r}
-load_VDB("https://api.vitaldb.net/fd869e25ba82a66cc95b38ed47110bf4f14bb368")
+#install.packages("httpcache")
+library(httpcache)
+load_VDB2 <- function(file_url) {
+  con <- gzcon(url(file_url))
+  txt <- readLines(con)
+  return(read.csv(textConnection(txt)))
+}
+
+
+load_VDB("https://api.vitaldb.net/fd869e25ba82a66cc95b38ed47110bf4f14bb368.csv.gz")
 ```
 

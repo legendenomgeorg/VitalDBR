@@ -11,6 +11,7 @@ install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 library("tidyverse")
 library(readr)
+library(mgcv)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -20,7 +21,6 @@ cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
                 ane_type=="General") %>%
       dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
 cases
-cases %>% 100
 ```
 
 ```{r}
@@ -30,6 +30,8 @@ mean(tmp[,2])
 ```
 
 ```{r}
+
+# This is retarded
 ppv <- function(case,art,awp){
   # her skal vi udregne ppv, men lige nu lægger jeg bare gennemsnittene sammen
   return(c(case, mean(na.omit(art[,2])) + mean(na.omit(awp[,2]) )))
@@ -69,6 +71,12 @@ loop <- function(cases){
 #loop(c(1,10))
 
 ```
+
+
+
+# better version
+
+
 Nå 3 min efter gik jeg havde sagt tak for i aften gik det op for mig at jeg kunne have gjort det meget mere simpelt. 
 - Find alle caseid's der lever op til de der conditions ligesom ovenfor
 - importer tracks med VitalDBR::load_VDB("https://api.vitaldb.net/cases")
@@ -84,8 +92,8 @@ tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
 
 ```{r}
 merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
-merged %>% dplyr::filter(death_inhosp==1)
-merged %>% dplyr::filter(icu_days>10)
+#merged %>% dplyr::filter(death_inhosp==1)
+#merged %>% dplyr::filter(icu_days>10)
 ```
 
 
@@ -94,23 +102,90 @@ merged
 ```
 
 
+```{r}
 
-Der sker et eller andet her
-Error in readLines(con) : 
-  cannot open the connection to 'https://api.vitaldb.net/.csv.gz' 
+calc_PPV <- function(smooth, intercept) {
+min_PP <- min(smooth)
+max_PP <- max(smooth)
+(max_PP - min_PP) / unname(intercept)
+}
 
+ppv_prepare <- function(case, data_art, data_awp){
+  # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
+  # men ellers er det bare at implemetere PPV udregningen her
+  start = 6000
+  sec = 30
+  sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
+  insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+  sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE,         cut_freq = 25)
+  sub_art=na.omit(sub_art)
+  sub_awp=na.omit(sub_awp)
+  beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,]
+  beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
+  PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
+  PP_gam <- gam(
+  # The first parameter to the gam() function is the model specification,
+  # supplied using formula notation:
+  PP ~ # Left of the tilde (~) is our dependent variable PP
+  # Right of the tilde is our independent variables.
+  # Define a smooth function of insp_rel_index.
+  s(ann_rel_index,
+  k =15, # 15 knots.
+  bs = "cc" # The basis is a cyclic cubic spline
+  ) +
+  # Define a smooth function of time
+  s(time,
+  bs = "cr" # The basis is a natural cubic spline.
+  # default k is 10. This will be fine here.
+  ),
+  # We can specify the positions of the knots for each smooth.
+  # If only two knots are specified for a cyclic spline, these will
+  # set the positions of the limiting knot(s). The remaining knots will
+  # be positioned automatically (at quantiles).
+  knots = list(ann_rel_index = c(0,1)),
+  # We use restricted maximum likelihood (REML) to fit the optimal smoothing parameter.
+  # This is often the best choice, but not the default.
+  method = "REML",
+  data = PP_data
+  )
+  splines <- predict(PP_gam, type = "terms")
+  PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
+  return(PPV)
+}
+
+process_cases <- function(data){
+  ppv_list <- data.frame(matrix(ncol=1,nrow=0))
+  
+  for (caseid in data$caseid){
+    startTime <- Sys.time()
+    art <- VitalDBR::load_case('SNUADC/ART', caseid)
+    awp <- VitalDBR::load_case('Primus/AWP', caseid)
+    endTime <- Sys.time()
+    print(endTime - startTime)
+    ppv_list <- rbind(ppv_list, ppv_prepare(caseid,art,awp))
+    print(caseid)
+  }
+  colnames(ppv_list) <- c('PPV')
+  return(cbind(data,ppv_list))
+}
+
+startTime <- Sys.time()
+ppv_data <- process_cases(merged[1,])
+endTime <- Sys.time()
+print(endTime - startTime)
+```
 
 
 ```{r}
-load_case("Primus/AWP", 10)
+(((1359/2)*29)/60)/60
+9.373362/10.97918
 ```
-
 
 
 ```{r}
 path <- getwd()
 filename = paste(path, 'df.csv',sep = '')
-write.csv(df, filename)
+write.csv(ppv_data), filename)
 ```
 
 
