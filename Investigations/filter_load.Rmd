@@ -7,7 +7,7 @@ output: html_document
 
 ```{r}
 library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
+install_github('legendenomgeorg/VitalDBR/VitalDBR',force=TRUE)
 library(VitalDBR)
 library("tidyverse")
 library(readr)
@@ -54,7 +54,7 @@ merged
 
 
 ```{r}
-#profvis({
+profvis({
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
 max_PP <- max(smooth)
@@ -65,24 +65,29 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
   # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
   # men ellers er det bare at implemetere PPV udregningen her
   op <- end - start
-  iterations <- floor(op/60)
-  interval <- 60
+  interval <- 120
+  iterations <- floor(op/interval)
   data <- c(matrix(nrow=iterations))
-  
   for (i in 1:iterations){
     sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
+    sub_awp <- na.omit(sub_awp)
     insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i) , filter=TRUE, cut_freq = 25)
-    beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,]
+    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
+    if (sum(is.na(sub_art$Time))>=nrow(sub_art)/2){
+      # if the dataframe consists of over half na values we skip the iteration
+      data[i] <- NA
+      next
+    }
+    beats <- waveformtools::find_abp_beats(sub_art,abp_col=2,time_col=1)
     beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
     PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
     PP_gam <- gam(
     PP ~ 
-    s(ann_rel_index,k =5, bs = "cc" ) + s(time, bs = "cr"), # splines
+    s(ann_rel_index,k = 5, bs = "cc" ) + s(time, k = 5, bs = "cr"), # splines
     knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
     splines <- predict(PP_gam, type = "terms")
     data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
-    cat("Iteration",i, "out of ", iterations,". For",case)
+    cat("Iteration",i, "out of ", iterations,". For case:",case)
   }
   
   return(data)
@@ -92,14 +97,18 @@ process_cases <- function(data){
   ppv_under6 <- data.frame(matrix(ncol=1,nrow=0))
   ppv_over12 <- data.frame(matrix(ncol=1,nrow=0))
   for (caseid in data$caseid){
+    closeAllConnections()
+    cat("Importing ART for case:",caseid)
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
+    cat("Importing AWP for case:",caseid)
     awp <- VitalDBR::load_case('Primus/AWP', caseid)
     start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
     end <- data$opend[data$caseid==caseid] # - II -
-    ppv_results <- ppv_prepare(caseid, start, end, art,awp)
-    len_ppv <- length(ppv_results)
+    ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
+    len_ppv <- length(na.omit(ppv_results))
     ppv_under6 <- rbind(ppv_under6, sum(ppv_results<=6)/len_ppv)
     ppv_over12 <- rbind(ppv_over12, sum(ppv_results>=12)/len_ppv)
+    
   }
   colnames(ppv_under6) <- c('ppv_under6')
   colnames(ppv_over12) <- c('ppv_over12')
@@ -111,9 +120,9 @@ process_cases <- function(data){
 
 startTime <- Sys.time()
 
-ppv_data <- process_cases(merged[1,])
+ppv_data <- process_cases(merged[1:10,])
 
-#})
+})
 endTime <- Sys.time()
 print(endTime - startTime)
 ppv_data
@@ -147,9 +156,41 @@ data
 
 
 ```{r}
+data_art <- load_case("SNUADC/ART",12)
+```
 
-test <- c(2,4,5,6,7,12,13,14,15,16)
-len <- 
-sum(test<=6)/length(test)
+
+```{r}
+interval <- 120
+start <- 5360
+end <- 30860
+i <- 143
+sub_art1 <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
+tail(sub_art1,5)
+```
+
+```{r}
+interval <- 120
+start <- 5360
+end <- 30860
+i <- 160
+sub_art2 <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
+
+```
+
+
+```{r}
+sub_art2
+plot(sub_art1)
+plot(sub_art2)
+```
+
+```{r}
+beats <- waveformtools::find_abp_beats(sub_art,abp_col=2,time_col=1)
+beats
+```
+```{r}
+318*130.59
+
 ```
 

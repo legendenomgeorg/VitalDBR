@@ -1,2 +1,2 @@
-"","caseid","death_inhosp","icu_days","age","sex","asa","emop","bmi","opstart","opend","PPV"
-"3",16,0,0,57,"M",2,0,26.2,2575,12175,3.70586822961567
+"","caseid","death_inhosp","icu_days","age","sex","asa","emop","bmi","opstart","opend","ppv_under6","ppv_over12"
+"1",1,0,0,77,"M",2,0,26.3,1668,10368,0.847222222222222,0.0277777777777778
