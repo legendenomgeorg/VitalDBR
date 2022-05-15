@@ -28,8 +28,8 @@ library(patchwork) #package used for plotting
 
 Then we need to load some data. For that we have created the function "load_case", which takes in a monitoring machine, the track of interest and finally the caseid. 
 ```{r}
-data_art <- VitalDBR::load_case('SNUADC/ART', 1)
-data_awp <- VitalDBR::load_case('Primus/AWP', 1)
+data_art <- VitalDBR::load_case('SNUADC/ART', 16)
+data_awp <- VitalDBR::load_case('Primus/AWP', 16)
 ```
 In this case we load the tracks ART (Arterial Blood Pressure) and AWP (Airway Pressure) for patient 1. ART is measured by the "SNUADC" machine and AWP is measured by the "Primus" machine.
 Under the hood this function finds all tracks with the inputted caseid and then stiches together the right API call such that we get the the right data. The format of the data also makes it easy to convert to a timeseries format as the frequency is saved in the first row of the first column, like this:
@@ -66,6 +66,14 @@ insp_start <- VitalDBR::get_inspiration_start(sub_awp)
 head(insp_start)
 ```
 The function returns the times of the peaks in a dataframe
+And we can then plot the inspirations on the AWP signal:
+```{r}
+ggplot(sub_awp, aes(Time, Primus.AWP)) +
+geom_line() +
+geom_vline(aes(xintercept = time), color = "red",
+data = insp_start)
+```
+
 
 # Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
 To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 

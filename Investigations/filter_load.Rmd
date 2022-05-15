@@ -19,61 +19,11 @@ cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
       dplyr::filter(approach=="Open",
                 department=="General surgery",
                 ane_type=="General") %>%
-      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi)
+      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi, opstart, opend)
 cases
 ```
 
-```{r}
-
-tmp <- VitalDBR::load_case("SNUADC/ART", 2258)
-mean(tmp[,2])
-```
-
-```{r}
-
-# This is retarded
-ppv <- function(case,art,awp){
-  # her skal vi udregne ppv, men lige nu lægger jeg bare gennemsnittene sammen
-  return(c(case, mean(na.omit(art[,2])) + mean(na.omit(awp[,2]) )))
-  #return(c(case, 3))
-}
-
-try_load <- function(track,i) {
-  data <-try(VitalDBR::load_case(track, i), TRUE)
-if(isTRUE(class(data)=="try-error")) 
-  {
-  return(TRUE) 
-  } 
-else 
-  { 
-    return(data)
-  } 
-}
-
-loop <- function(cases){
-  data <- data.frame(matrix(ncol=2,nrow=0))
-  for (case in cases){
-    art <- try_load("SNUADC/ART", case)
-    awp <- try_load("Primus/AWP", case)
-    if (isTRUE(art) | isTRUE(awp)){
-      return(NULL)
-    }
-    else{
-      data <- rbind(data, ppv(case,art,awp))
-    }
-  }
-  columns <- c("caseid", "PPV")
-  colnames(data) <- columns
-  return(data)
-}
-
-
-#loop(c(1,10))
-
-```
-
-
-
+Har fjernet den dårlige version
 # better version
 
 
@@ -185,8 +135,29 @@ print(endTime - startTime)
 ```{r}
 path <- getwd()
 filename = paste(path, 'df.csv',sep = '')
-write.csv(ppv_data), filename)
+write.csv(ppv_data, filename)
+```
+
+```{r}
+VitalDBR::load_VDB("https://api.vitaldb.net/cases")
 ```
 
 
+
+```{r}
+data_art <- VitalDBR::load_case('SNUADC/ART', 1)
+```
+
+
+```{r}
+plot(data_art,type='l')
+abline(v=1668)
+abline(v=10368)
+start = 1600
+sec= 30
+sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start)
+plot(sub_art,type='l')
+abline(v=1668)
+abline(v=10368)
+```
 
