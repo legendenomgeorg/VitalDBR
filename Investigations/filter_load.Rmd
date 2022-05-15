@@ -12,6 +12,7 @@ library(VitalDBR)
 library("tidyverse")
 library(readr)
 library(mgcv)
+library("profvis")
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -53,62 +54,73 @@ merged
 
 
 ```{r}
-
+#profvis({
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
 max_PP <- max(smooth)
 (max_PP - min_PP) / unname(intercept)
 }
 
-ppv_prepare <- function(case, data_art, data_awp){
+ppv_prepare <- function(case, start, end, data_art, data_awp){
   # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
   # men ellers er det bare at implemetere PPV udregningen her
-  start = 10000
-  sec = 30
+  op <- end - start
+  iterations <- floor(op/60)
+  interval <- 60
+  data <- c(matrix(nrow=iterations))
   
-  sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
-  insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-  sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
-  sub_art=na.omit(sub_art)
-  sub_awp=na.omit(sub_awp)
-  beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,]
-  beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
-  PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
-  PP_gam <- gam(
-  PP ~ 
-  s(ann_rel_index,k =15, bs = "cc" ) + s(time, bs = "cr"), # splines
-  knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
-  splines <- predict(PP_gam, type = "terms")
-  PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
-  return(PPV)
+  for (i in 1:iterations){
+    sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
+    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i) , filter=TRUE, cut_freq = 25)
+    beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,]
+    beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
+    PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
+    PP_gam <- gam(
+    PP ~ 
+    s(ann_rel_index,k =5, bs = "cc" ) + s(time, bs = "cr"), # splines
+    knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
+    splines <- predict(PP_gam, type = "terms")
+    data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+    cat("Iteration",i, "out of ", iterations,". For",case)
+  }
+  
+  return(data)
 }
 
 process_cases <- function(data){
-  ppv_list <- data.frame(matrix(ncol=1,nrow=0))
-  
+  ppv_under6 <- data.frame(matrix(ncol=1,nrow=0))
+  ppv_over12 <- data.frame(matrix(ncol=1,nrow=0))
   for (caseid in data$caseid){
-    startTime <- Sys.time()
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
     awp <- VitalDBR::load_case('Primus/AWP', caseid)
-    endTime <- Sys.time()
-    print(endTime - startTime)
-    ppv_list <- rbind(ppv_list, ppv_prepare(caseid,art,awp))
+    start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
+    end <- data$opend[data$caseid==caseid] # - II -
+    ppv_results <- ppv_prepare(caseid, start, end, art,awp)
+    len_ppv <- length(ppv_results)
+    ppv_under6 <- rbind(ppv_under6, sum(ppv_results<=6)/len_ppv)
+    ppv_over12 <- rbind(ppv_over12, sum(ppv_results>=12)/len_ppv)
   }
-  colnames(ppv_list) <- c('PPV')
-  return(cbind(data,ppv_list))
+  colnames(ppv_under6) <- c('ppv_under6')
+  colnames(ppv_over12) <- c('ppv_over12')
+  data <- cbind(data, ppv_under6)
+  data <- cbind(data, ppv_over12)
+  return(data)
 }
 
+
 startTime <- Sys.time()
-ppv_data <- process_cases(merged[3,])
+
+ppv_data <- process_cases(merged[1,])
+
+#})
 endTime <- Sys.time()
 print(endTime - startTime)
 ppv_data
 ```
 
-
 ```{r}
-(((1359/2)*29)/60)/60
-9.373362/10.97918
+View(ppv_data)
 ```
 
 
@@ -118,24 +130,8 @@ filename = paste(path, 'df.csv',sep = '')
 write.csv(ppv_data, filename)
 ```
 
-```{r}
-VitalDBR::load_VDB("https://api.vitaldb.net/cases")
-```
 
 
-
-```{r}
-data_art <- VitalDBR::load_case('SNUADC/ART', 16)
-```
-
-
-```{r}
-plot(data_art,type='l')
-start = 10000
-sec= 30
-sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start)
-plot(sub_art,type='l')
-```
 ```{r}
 opstart <- 1668
 opend <- 10369
@@ -148,11 +144,12 @@ for (i in 1:iterations){
 }
 data
 ```
-```{r}
-View(VitalDBR::load_VDB("https://api.vitaldb.net/cb3ec59a7777932470adcb1e1a798c754d8ffab3.csv.gz"))
-```
+
 
 ```{r}
-VitalDBR::load_case('Primus/AWP', 16)
+
+test <- c(2,4,5,6,7,12,13,14,15,16)
+len <- 
+sum(test<=6)/length(test)
 ```
 

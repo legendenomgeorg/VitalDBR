@@ -93,14 +93,12 @@ get_inspiration_start <- function(data, data_column=2) {
 #' @param seconds
 subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
   hz <- 1/(data[2,1]-data[1,1])
+  start <- start_sec*hz
+  data <- data[start:(start+(seconds*hz)),]
   if (isTRUE(filter)){
     data <- waveformtools::filter_signal(data, cut_freq, sample_rate = hz, signal_col = 2) # 25 is domain knowledge
   }
-  start <- start_sec*hz
-  data <- data[start:(start+(seconds*hz)),]
   rownames(data) <- NULL
   return(data)
 }
-
-
 
