@@ -64,16 +64,16 @@ load_case <- function(tname, caseid){
 #' @export
 #' @param data Dataframe with AWP
 get_inspiration_start <- function(data, data_column=2) {
-  
+
   n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
-  
+
   my_filter <- c(before, 0, after)
   convolution <- data.frame(stats::filter(x = data[,data_column],
               filter= my_filter, sides=1, method="convolution"))
   convolution <- cbind(convolution,data[,1])
-  
+
   convolution <- convolution[, c(2,1)]
   names(convolution)[1] <- "time"
   names(convolution)[2] <- "values"
