@@ -63,43 +63,23 @@ max_PP <- max(smooth)
 ppv_prepare <- function(case, data_art, data_awp){
   # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
   # men ellers er det bare at implemetere PPV udregningen her
-  start = 6000
+  start = 10000
   sec = 30
+  
   sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
   insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-  sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE,         cut_freq = 25)
+  sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
   sub_art=na.omit(sub_art)
   sub_awp=na.omit(sub_awp)
   beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,]
   beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
   PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
   PP_gam <- gam(
-  # The first parameter to the gam() function is the model specification,
-  # supplied using formula notation:
-  PP ~ # Left of the tilde (~) is our dependent variable PP
-  # Right of the tilde is our independent variables.
-  # Define a smooth function of insp_rel_index.
-  s(ann_rel_index,
-  k =15, # 15 knots.
-  bs = "cc" # The basis is a cyclic cubic spline
-  ) +
-  # Define a smooth function of time
-  s(time,
-  bs = "cr" # The basis is a natural cubic spline.
-  # default k is 10. This will be fine here.
-  ),
-  # We can specify the positions of the knots for each smooth.
-  # If only two knots are specified for a cyclic spline, these will
-  # set the positions of the limiting knot(s). The remaining knots will
-  # be positioned automatically (at quantiles).
-  knots = list(ann_rel_index = c(0,1)),
-  # We use restricted maximum likelihood (REML) to fit the optimal smoothing parameter.
-  # This is often the best choice, but not the default.
-  method = "REML",
-  data = PP_data
-  )
+  PP ~ 
+  s(ann_rel_index,k =15, bs = "cc" ) + s(time, bs = "cr"), # splines
+  knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
   splines <- predict(PP_gam, type = "terms")
-  PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
+  PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
   return(PPV)
 }
 
@@ -113,16 +93,16 @@ process_cases <- function(data){
     endTime <- Sys.time()
     print(endTime - startTime)
     ppv_list <- rbind(ppv_list, ppv_prepare(caseid,art,awp))
-    print(caseid)
   }
   colnames(ppv_list) <- c('PPV')
   return(cbind(data,ppv_list))
 }
 
 startTime <- Sys.time()
-ppv_data <- process_cases(merged[1,])
+ppv_data <- process_cases(merged[3,])
 endTime <- Sys.time()
 print(endTime - startTime)
+ppv_data
 ```
 
 
@@ -145,19 +125,34 @@ VitalDBR::load_VDB("https://api.vitaldb.net/cases")
 
 
 ```{r}
-data_art <- VitalDBR::load_case('SNUADC/ART', 1)
+data_art <- VitalDBR::load_case('SNUADC/ART', 16)
 ```
 
 
 ```{r}
 plot(data_art,type='l')
-abline(v=1668)
-abline(v=10368)
-start = 1600
+start = 10000
 sec= 30
 sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start)
 plot(sub_art,type='l')
-abline(v=1668)
-abline(v=10368)
+```
+```{r}
+opstart <- 1668
+opend <- 10369
+op <- opend - opstart
+iterations <- floor(op/60)
+interval <- 60
+data <- c(matrix(nrow=iterations))
+for (i in 1:iterations){
+  data[i] <- opstart+(interval*i)
+}
+data
+```
+```{r}
+View(VitalDBR::load_VDB("https://api.vitaldb.net/cb3ec59a7777932470adcb1e1a798c754d8ffab3.csv.gz"))
+```
+
+```{r}
+VitalDBR::load_case('Primus/AWP', 16)
 ```
 
