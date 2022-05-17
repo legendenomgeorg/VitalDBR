@@ -102,19 +102,19 @@ subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
   return(data)
 }
 
-library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR',force=TRUE)
-library(VitalDBR)
-data <- VitalDBR::load_case('SNUADC/ART', 1)
-hz <- 1/(data[2,1]-data[1,1])
+#library(devtools)
+#install_github('legendenomgeorg/VitalDBR/VitalDBR',force=TRUE)
+#library(VitalDBR)
+#data <- VitalDBR::load_case('SNUADC/ART', 1)
+#hz <- 1/(data[2,1]-data[1,1])
 
-startTime <- Sys.time()
-test1 <- subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
-endTime <- Sys.time()
-print(endTime - startTime)
+#startTime <- Sys.time()
+#test1 <- subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
+#endTime <- Sys.time()
+#print(endTime - startTime)
 
 
-startTime <- Sys.time()
-test2 <-VitalDBR::subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
-endTime <- Sys.time()
-print(endTime - startTime)
+#startTime <- Sys.time()
+#test2 <-VitalDBR::subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
+#endTime <- Sys.time()
+#print(endTime - startTime)
