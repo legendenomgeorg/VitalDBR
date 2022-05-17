@@ -7,8 +7,7 @@ output: html_document
 
 ```{r, message=FALSE}
 library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
-#library(VitalDBR, lib.loc="/Users/geo/repo/VitalDBR/VitalDBR")
+#install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 library("tidyverse")
 library(readr)
@@ -16,6 +15,7 @@ library(mgcv)
 library(profvis)
 library(data.table)
 library(RcppRoll)
+library(RcppArmadillo)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -64,7 +64,7 @@ hist(merged$icu_days, breaks=82)
 
 
 ```{r}
-profvis({
+#profvis({
 find_abp_beats <- function(data,
                            abp_col = 2,
                            time_col = 1,
@@ -234,8 +234,19 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
     if(skip_to_next) { 
       data[i] <- NA
       next
-      } 
-    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+    } 
+    
+    insp_start_trycatch <- tryCatch({
+      insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+    },
+    error = function(e){
+        skip_to_next <<- TRUE
+    })
+    if(skip_to_next) { 
+      data[i] <- NA
+      next
+    }
+    
     
     sub_art_trycatch <- tryCatch({
     sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
@@ -305,24 +316,24 @@ process_cases <- function(data){
   return(data)
 }
 startTime <- Sys.time()
-ppv_data <- process_cases(merged[1,])
+ppv_data <- process_cases(merged)
 endTime <- Sys.time()
 print(endTime - startTime)
 View(ppv_data)
-})
+#})
+
+
+path <- getwd()
+filename = paste(path, 'df_win_full.csv',sep = '')
+#write.csv(ppv_data, filename)
+
 ```
-dfsds
+
 ```{r}
 # data.frame: Time difference of 41.54168 secs 
 # as.tibble: Time difference of 41.2858 secs
-View(ppv_data)
+#View(ppv_data)
 ```
 
-
-```{r}
-#path <- getwd()
-#filename = paste(path, 'df_overnight.csv',sep = '')
-#write.csv(ppv_data, filename)
-```
 
 
