@@ -24,8 +24,8 @@ check_hz <- function(data){
   if (is.na(data[3,1])){
     freq = data[2,1]
     data <- subset (data, select = -Time)
-    data<- na.omit(data)
-    data <- cbind(data,"Time"=1:nrow(data)*freq)
+    data<- na.omit(data) # A bit controversial perhaps
+    data <- cbind(data, "Time"=1:nrow(data)*freq)
     data <- data[, c(2,1)] # reorder columns'
     rownames(data) <- NULL
     return(data)

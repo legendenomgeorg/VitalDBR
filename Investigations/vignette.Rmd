@@ -34,9 +34,10 @@ library(patchwork) #package used for plotting
 
 Then we need to load some data. For that we have created the function "load_case", which takes in a monitoring machine, the track of interest and finally the caseid. 
 ```{r}
-data_art <- VitalDBR::load_case('SNUADC/ART', 16)
-data_awp <- VitalDBR::load_case('Primus/AWP', 16)
+data_art <- VitalDBR::load_case('SNUADC/ART', 583)
+data_awp <- VitalDBR::load_case('Primus/AWP', 583)
 ```
+
 In this case we load the tracks ART (Arterial Blood Pressure) and AWP (Airway Pressure) for patient 1. ART is measured by the "SNUADC" machine and AWP is measured by the "Primus" machine.
 Under the hood this function finds all tracks with the inputted caseid and then stiches together the right API call such that we get the the right data. The format of the data also makes it easy to convert to a timeseries format as the frequency is saved in the first row of the first column, like this:
 

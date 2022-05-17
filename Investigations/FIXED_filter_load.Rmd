@@ -5,18 +5,17 @@ date: "5/11/2022"
 output: html_document
 ---
 
-```{r}
-#install.packages("devtools")
-library(compiler)
-enableJIT(level = 3)
+```{r, message=FALSE}
 library(devtools)
-#install_github('legendenomgeorg/VitalDBR/VitalDBR')
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
 #library(VitalDBR, lib.loc="/Users/geo/repo/VitalDBR/VitalDBR")
 library(VitalDBR)
 library("tidyverse")
 library(readr)
 library(mgcv)
 library(profvis)
+library(data.table)
+library(RcppRoll)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -64,6 +63,9 @@ hist(merged$icu_days, breaks=82)
 ```
 
 ```{r}
+
+
+#profvis({
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
 max_PP <- max(smooth)
@@ -76,53 +78,69 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
   op <- end - start
   interval <- 120
   iterations <- floor(op/interval)
-  data <- c(matrix(nrow=iterations))
+  data <- c(matrix(NA, nrow=iterations))
+  skip_to_next <- FALSE
   for (i in 0:iterations){
-    sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
-    sub_awp <- na.omit(sub_awp)
-    if (nrow(sub_awp)<=2000){ 
-      data[i+1] <- NA
+    sub_awp_trycatch <- tryCatch({
+      sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
+    },
+    error = function(e){
+      skip_to_next <<- TRUE
+    })
+    if(skip_to_next) { 
+      data[i] <- NA
       next
-    }
+      } 
     insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
     
-    if (sum(is.na(sub_art))>=nrow(sub_art)/2){ 
-      # if the dataframe consists of over half na values we skip the iteration
-      data[i+1] <- NA
+    sub_art_trycatch <- tryCatch({
+    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
+    },
+    error = function(e){
+        skip_to_next <<- TRUE
+    })
+    if(skip_to_next) { 
+      data[i] <- NA
       next
     }
-    
-    # had to not filter with the subset function, due to too many NA values...
-    hz <- 1/(sub_art[2,1]-sub_art[1,1])
-    sub_art <- na.omit(sub_art)
-    sub_art <- waveformtools::filter_signal(sub_art, 25, sample_rate = hz, signal_col = 2)
-    #cat("sub_awp",nrow(sub_awp))
-    #cat("sub_art",nrow(sub_art))
-    beats <- waveformtools::find_abp_beats(sub_art,abp_col=3, time_col=1)
-    if (nrow(beats)<=40){  #the constant is based on amount of parameters in the gam
-      data[i+1] <- NA
-      next
-    }
-    cat("nrow(beats)", nrow(beats))
+    beats <- waveformtools::find_abp_beats(sub_art, abp_col=3, time_col=1)
+    cat("nrow beats", nrow(beats))
     beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
+    rm(beats)
     PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
-    PP_gam <- gam(
-    PP ~ 
-    s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
-    knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
-    splines <- predict(PP_gam, type = "terms")
-    data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
-    cat("Iteration",i, "out of ", iterations,". For case:",case)
+    gam_try_catch <- tryCatch(
+    {
+      PP_gam <- gam(
+      PP ~ 
+      s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
+      knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
+      splines <- predict(PP_gam, type = "terms")
+      
+      data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+      
+      cat("Iteration",i, "out of ", iterations,". For case:",case)
+      
+      rm(PP_data)
+      
+    },
+    error = function(e){
+      skip_to_next <<- TRUE
+    }
+    )
+    if(skip_to_next) { 
+      data[i] <- NA
+      next 
+      } 
   }
-  
   return(data)
 }
 
 process_cases <- function(data){
-  ppv_under5 <- data.frame(matrix(ncol=1,nrow=0))
-  ppv_over8 <- data.frame(matrix(ncol=1,nrow=0))
+  ppv_under5 <- data.frame(matrix(NA, nrow = nrow(data)))
+  ppv_over8 <- data.frame(matrix(NA, nrow = nrow(data)))
+  counter <- 0 
   for (caseid in data$caseid){
+    counter <- counter + 1 
     closeAllConnections()
     cat("Importing ART for case:",caseid)
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
@@ -131,9 +149,11 @@ process_cases <- function(data){
     start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
     end <- data$opend[data$caseid==caseid] # - II -
     ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
+    rm(art)
+    rm(awp)
     len_ppv <- length(ppv_results)
-    ppv_under5 <- rbind(ppv_under5, sum(ppv_results<=5)/len_ppv)
-    ppv_over8 <- rbind(ppv_over8, sum(ppv_results>=8)/len_ppv)
+    ppv_under5[counter] <- sum(ppv_results<=5)/len_ppv
+    ppv_over8[counter] <- sum(ppv_results>=8)/len_ppv
   }
   colnames(ppv_under5) <- c('ppv_under5')
   colnames(ppv_over8) <- c('ppv_over8')
@@ -142,15 +162,16 @@ process_cases <- function(data){
   return(data)
 }
 startTime <- Sys.time()
-
 ppv_data <- process_cases(merged[1,])
-
 endTime <- Sys.time()
 print(endTime - startTime)
-
+View(ppv_data)
+#})
 ```
 
 ```{r}
+# data.frame: Time difference of 41.54168 secs 
+# as.tibble: Time difference of 41.2858 secs
 View(ppv_data)
 ```
 
@@ -161,8 +182,19 @@ View(ppv_data)
 #write.csv(ppv_data, filename)
 ```
 
+```{r}
+art <- VitalDBR::load_case('SNUADC/ART', 1)
+awp <- VitalDBR::load_case('Primus/AWP', 1)
+```
 
 ```{r}
-VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+if (nrow(art)/2 < length(art[,1]<=0) ){
+
+
+
+```
+
+```{r}
+plot(art)
 ```
 
