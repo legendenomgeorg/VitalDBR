@@ -6,13 +6,17 @@ output: html_document
 ---
 
 ```{r}
+#install.packages("devtools")
+library(compiler)
+enableJIT(level = 3)
 library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR',force=TRUE)
+#install_github('legendenomgeorg/VitalDBR/VitalDBR')
+#library(VitalDBR, lib.loc="/Users/geo/repo/VitalDBR/VitalDBR")
 library(VitalDBR)
 library("tidyverse")
 library(readr)
 library(mgcv)
-library("profvis")
+library(profvis)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -51,6 +55,15 @@ merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
 ```{r}
 merged
 ```
+Pas på med at fjerne NA, fordi så forsvinder nogle af de operationer hvor de døde!
+
+```{r}
+max(merged$icu_days)+1
+table(merged$icu_days)
+hist(merged$icu_days, breaks=82)
+```
+
+Append til csv fil løbende
 
 
 ```{r}
@@ -65,20 +78,37 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
   # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
   # men ellers er det bare at implemetere PPV udregningen her
   op <- end - start
-  interval <- 120
+  interval <- 60
   iterations <- floor(op/interval)
   data <- c(matrix(nrow=iterations))
-  for (i in 1:iterations){
+  for (i in 0:iterations){
     sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
     sub_awp <- na.omit(sub_awp)
-    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
-    if (sum(is.na(sub_art$Time))>=nrow(sub_art)/2){
-      # if the dataframe consists of over half na values we skip the iteration
-      data[i] <- NA
+    if (nrow(sub_awp)<=2000){ 
+      data[i+1] <- NA
       next
     }
-    beats <- waveformtools::find_abp_beats(sub_art,abp_col=2,time_col=1)
+    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
+    
+    if (sum(is.na(sub_art))>=nrow(sub_art)/2){ 
+      # if the dataframe consists of over half na values we skip the iteration
+      data[i+1] <- NA
+      next
+    }
+    
+    # had to not filter with the subset function, due to too many NA values...
+    hz <- 1/(sub_art[2,1]-sub_art[1,1])
+    sub_art <- na.omit(sub_art)
+    sub_art <- waveformtools::filter_signal(sub_art, 25, sample_rate = hz, signal_col = 2)
+    #cat("sub_awp",nrow(sub_awp))
+    #cat("sub_art",nrow(sub_art))
+    beats <- waveformtools::find_abp_beats(sub_art,abp_col=3, time_col=1)
+    if (nrow(beats)<=40){  #the constant is based on amount of parameters in the gam
+      data[i+1] <- NA
+      next
+    }
+    cat("nrow(beats)", nrow(beats))
     beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
     PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
     PP_gam <- gam(
@@ -98,6 +128,7 @@ process_cases <- function(data){
   ppv_over12 <- data.frame(matrix(ncol=1,nrow=0))
   for (caseid in data$caseid){
     closeAllConnections()
+    gc()
     cat("Importing ART for case:",caseid)
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
     cat("Importing AWP for case:",caseid)
@@ -105,13 +136,12 @@ process_cases <- function(data){
     start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
     end <- data$opend[data$caseid==caseid] # - II -
     ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
-    len_ppv <- length(na.omit(ppv_results))
-    ppv_under6 <- rbind(ppv_under6, sum(ppv_results<=6)/len_ppv)
-    ppv_over12 <- rbind(ppv_over12, sum(ppv_results>=12)/len_ppv)
-    
+    len_ppv <- length(ppv_results)
+    ppv_under6 <- rbind(ppv_under6, sum(ppv_results<=5)/len_ppv)
+    ppv_over12 <- rbind(ppv_over12, sum(ppv_results>=8)/len_ppv)
   }
-  colnames(ppv_under6) <- c('ppv_under6')
-  colnames(ppv_over12) <- c('ppv_over12')
+  colnames(ppv_under6) <- c('ppv_under5')
+  colnames(ppv_over12) <- c('ppv_over8')
   data <- cbind(data, ppv_under6)
   data <- cbind(data, ppv_over12)
   return(data)
@@ -120,12 +150,15 @@ process_cases <- function(data){
 
 startTime <- Sys.time()
 
-ppv_data <- process_cases(merged[1:10,])
+ppv_data <- process_cases(merged[1,])
 
-})
 endTime <- Sys.time()
 print(endTime - startTime)
-ppv_data
+})
+path <- getwd()
+#filename = paste(path, 'df_201_250.csv',sep = '')
+#write.csv(ppv_data, filename)
+
 ```
 
 ```{r}
@@ -134,63 +167,13 @@ View(ppv_data)
 
 
 ```{r}
-path <- getwd()
-filename = paste(path, 'df.csv',sep = '')
-write.csv(ppv_data, filename)
-```
-
-
-
-```{r}
-opstart <- 1668
-opend <- 10369
-op <- opend - opstart
-iterations <- floor(op/60)
-interval <- 60
-data <- c(matrix(nrow=iterations))
-for (i in 1:iterations){
-  data[i] <- opstart+(interval*i)
-}
-data
+#path <- getwd()
+#filename = paste(path, 'df_overnight.csv',sep = '')
+#write.csv(ppv_data, filename)
 ```
 
 
 ```{r}
-data_art <- load_case("SNUADC/ART",12)
-```
-
-
-```{r}
-interval <- 120
-start <- 5360
-end <- 30860
-i <- 143
-sub_art1 <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
-tail(sub_art1,5)
-```
-
-```{r}
-interval <- 120
-start <- 5360
-end <- 30860
-i <- 160
-sub_art2 <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i))
-
-```
-
-
-```{r}
-sub_art2
-plot(sub_art1)
-plot(sub_art2)
-```
-
-```{r}
-beats <- waveformtools::find_abp_beats(sub_art,abp_col=2,time_col=1)
-beats
-```
-```{r}
-318*130.59
-
+VitalDBR::load_VDB("https://api.vitaldb.net/cases")
 ```
 

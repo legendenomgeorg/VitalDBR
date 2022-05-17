@@ -7,14 +7,20 @@ output:
     math: katex
 ---
 # Introduction / Motivation
+This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
+First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure. We subset filter and detect events for this data through signal processing. 
+After that we show how to use the processed data and detected events to fit a Generalized Additive Model and extract the pulse pressure variation. 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patients survive. To do this we fit a GAM for every minute during operation and see the proportion of those outside the interval $ 6 < PPV < 12$. 
+When this dataset is built, we use the results to do a probit regression with the binary in-hospital mortality as the dependent variable. We also include other important features, to prevent confounding variables.
 
-
-# Preparing everything
+# Fitting a gam
+## Preparing everything
 Before we get started, we need a couple of packages. 
-```{r, message=FALSE}
+```{r}
 # This is how you install VitalDBR!
-library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
+#install_github('legendenomgeorg/VitalDBR/VitalDBR', build=T,build_vignettes = TRUE)
+#install.packages("/Users/geo/repo/VitalDBR/VitalDBR/", repo=NULL, type = "source")
+#library("VitalDBR", lib.loc="/Users/geo/repo/VitalDBR/VitalDBR")
 library(VitalDBR)
 ```
 
@@ -46,7 +52,7 @@ sec = 30 # Last 30 seconds from 10000. Such that the interval is now 10000 sec t
 ```
 
 
-# Finding the inspiration of AWP
+## Finding the inspiration of AWP
 
 Now we introduce our function: "subset_data". This function helps with choosing an interval of a timeseries defined by frequency. It automatically sets converts frequency to seconds and subsets the data. The reason the time variable is not converted to the row index, is that it makes it difficult to work with. 
 ```{r}
@@ -75,7 +81,7 @@ data = insp_start)
 ```
 
 
-# Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
+## Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
 To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
 
 ```{r}
@@ -150,7 +156,7 @@ geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE) +
 labs(subtitle = "by position in the respiratory cycle")
 pp_plot_color + pp_insp_plot
 ```
-# Fitting the GAM
+## Fitting the GAM
 
 We can generally write the GAM structure as:
 $g(E(Y))=α+s1(x1)+⋯+sp(xp)$
@@ -189,13 +195,12 @@ data = PP_data
 gratia::draw(PP_gam,
 residuals = TRUE)
 ```
-We need the last part of the right hand side, which is the intercept:
+We need the last part of the right hand side, which is the intercept ( or is it the mean? or is that the same?):
 ```{r}
 alpha <- coef(PP_gam)[1] # intercept
 alpha
 ```
 Now we can construct the expected value of Y, the pulse pressure, through adding: Alpha, s(ann_rel_index) and s(time)
-
 
 
 Time to calculate PPV
@@ -209,6 +214,66 @@ splines <- predict(PP_gam, type = "terms")
 PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
 PPV
 ```
+# Association study - does PPV influence survival of patients?
+This part of the vignette revolves around utilizing what we have previously done, to make a large scale association study to understand whether the Pulse Pressure Variation (PPV) during an operation influences the outcome.
+
+## Creating the dataset
+To create the data set we need to calculate the PPV for every minute of every operation... That is a lot of calculation! Therefore we have added the final dataset to the repo, such that you do not have to spend sleepless nights hoping that R doesn't crash during it's 1147th iteration.
+But before we can calculate the PPV we need to restrict our dataset to the following criteria:
+- The surgery approach should be "open"
+- The department should be "General surgery"
+- The type of anasthesia should be "General"
+(These restrictions were decided by our advisers)
+We do that as such:
+```{r}
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
+      dplyr::filter(approach=="Open",
+                department=="General surgery",
+                ane_type=="General") %>%
+      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi, opstart, opend)
+head(cases)
+```
+
+As we know from the first part of this vignette, we need both the Arterial Blood Pressure (ART) and the Airway Pressure (AWP) to calculate the GAM. Therefore we also restrict our data to cases which have both sensors like so:
+```{r}
+tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
+    dplyr::filter(tname == "Primus/AWP" | tname == "SNUADC/ART") %>%
+    count(caseid) %>%
+    dplyr::filter(n == 2)
+
+head(tracks)
+```
+We then join those two datasets together by their case id, which results in the final dataset:
+```{r}
+merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
+
+head(merged)
+```
+
+And now for the interesting part:
+
+## Regression analysis
+
+Now that we have created our dataset, it 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
