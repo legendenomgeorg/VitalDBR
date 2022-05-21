@@ -16,6 +16,7 @@ library(profvis)
 library(data.table)
 library(RcppRoll)
 library(RcppArmadillo)
+library(sandwich)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -291,15 +292,15 @@ process_cases <- function(data){
   data <- cbind(data, ppv_over8)
   return(data)
 }
-startTime <- Sys.time()
-ppv_data <- process_cases(merged)
-endTime <- Sys.time()
-print(endTime - startTime)
-View(ppv_data)
+#startTime <- Sys.time()
+#ppv_data <- process_cases(merged)
+#endTime <- Sys.time()
+#print(endTime - startTime)
+#View(ppv_data)
 #})
-path <- getwd()
-filename = paste(path, 'df_win_full.csv',sep = '')
-write.csv(ppv_data, filename)
+#path <- getwd()
+#filename = paste(path, 'df.csv',sep = '')
+#write.csv(ppv_data, filename)
 
 ```
 
@@ -309,5 +310,59 @@ write.csv(ppv_data, filename)
 #View(ppv_data)
 ```
 
+```{r}
+data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
+data
+```
+```{r}
+plot(data$icu_days, data$ppv_under5)
+```
 
+
+## Normal Poisson regression
+```{r}
+pois_reg <- glm(icu_days ~ . , data=data, family="poisson")
+summary(pois_reg)
+# 
+```
+
+Analyzing the coefficients we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
+
+We can also see that the residual deviance is provided, hence we can do a goodness of fit test for the overall model. (her skal vi læse op på teorien og nok også forklare det, se stack linket under)
+```{r}
+with(pois_reg, cbind(res.deviance = deviance, df = df.residual,
+  p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+```
+This is REALLY bad haha
+
+It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs with out ppv_under5 as a variable:
+```{r}
+## update m1 model dropping prog
+pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
+## test model differences with chi square test
+anova(pois_reg2, pois_reg, test="Chisq")
+```
+Not a lot, but we can still se that ppv_under5 is a significant predictor nevertheless
+
+- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
+- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
+
+
+
+
+
+## Zero Inflated Poisson
+```{r}
+zi_pois_reg <- zeroinfl(icu_days ~ ., data=data, dist="poisson")
+summary(zi_pois_reg)
+```
+
+
+
+
+# pseudo discrete compound poisson 
+```{r}
+library(cplm)
+pdc_pois_reg <- cpglmm(icu_days ~ age + sex + asa + emop + bmi + ppv_under5 + ppv_over8 , data = data)
+```
 

@@ -1,0 +1,86 @@
+---
+title: "Statistical Analysis"
+author: "Georg"
+date: "5/21/2022"
+output: html_document
+---
+```{r}
+data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
+data
+```
+```{r}
+plot(data$icu_days, data$ppv_under5)
+```
+
+
+## Normal Poisson regression
+```{r}
+pois_reg <- glm(icu_days ~ . , data=data, family="poisson")
+summary(pois_reg)
+# 
+```
+
+Analyzing the coefficients we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
+
+We can also see that the residual deviance is provided, hence we can do a goodness of fit test for the overall model. (her skal vi læse op på teorien og nok også forklare det, se stack linket under)
+```{r}
+with(pois_reg, cbind(res.deviance = deviance, df = df.residual,
+  p = pchisq(deviance, df.residual, lower.tail=FALSE)))
+```
+This is REALLY bad haha
+
+It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs with out ppv_under5 as a variable:
+```{r}
+## update m1 model dropping prog
+pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
+## test model differences with chi square test
+anova(pois_reg2, pois_reg, test="Chisq")
+```
+Not a lot, but we can still se that ppv_under5 is a significant predictor nevertheless
+
+- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
+- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
+
+
+
+
+
+## Zero Inflated Poisson
+```{r}
+zi_pois_reg <- zeroinfl(icu_days ~ ., data=data, dist="poisson")
+summary(zi_pois_reg)
+
+```
+Lets us compare our current model to a null model:
+
+```{r}
+zi_pois_reg_null <- update(zi_pois_reg, . ~ 1)
+
+pchisq(2 * (logLik(zi_pois_reg) - logLik(zi_pois_reg_null)), df = 7, lower.tail = FALSE)
+```
+Ved ikke om det her er sådan: 0.0000000000000000 eller om det er en fejl haha
+
+
+Now let us compare this model to the normal poisson regression:
+
+```{r}
+vuong(pois_reg ,zi_pois_reg)
+```
+We can see that the Vuong z-statistic is significant, which means that model 2 (zeroinflated) is better than model 1 (regular)
+
+Vigtigt vi læser op på hvad en vuong test er :)
+
+
+
+Her tænker jeg vi skal lave noget bootstrap ci for at finde incident risk ratio of odds ratio. Tjek linket under 
+
+
+https://stats.oarc.ucla.edu/r/dae/zip/
+
+# pseudo discrete compound poisson 
+```{r}
+library(cplm)
+pdc_pois_reg <- cpglm(icu_days ~ . , data = data)
+summary(pdc_pois_reg)
+```
+
