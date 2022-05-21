@@ -205,11 +205,9 @@ find_abp_beats <- function(data,
 
 }
 
+```
 
-#------------------------------------------------------------------------------------------------------------------------------
-
-
-
+```{r}
 
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
@@ -225,57 +223,23 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
   data <- c(matrix(NA, nrow=iterations))
   skip_to_next <- FALSE
   for (i in 0:iterations){
-    sub_awp_trycatch <- tryCatch({
-      sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
-    },
-    error = function(e){
-      skip_to_next <<- TRUE
-    })
-    if(skip_to_next) { 
-      data[i] <- NA
-      next
-    } 
-    
-    insp_start_trycatch <- tryCatch({
-      insp_start <- VitalDBR::get_inspiration_start(sub_awp)
-    },
-    error = function(e){
-        skip_to_next <<- TRUE
-    })
-    if(skip_to_next) { 
-      data[i] <- NA
-      next
-    }
-    
-    
-    sub_art_trycatch <- tryCatch({
+        try_catch <- tryCatch(
+    {
+    sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
+    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
     sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
-    },
-    error = function(e){
-        skip_to_next <<- TRUE
-    })
-    if(skip_to_next) { 
-      data[i] <- NA
-      next
-    }
     beats <- find_abp_beats(sub_art, abp_col=3, time_col=1)
     beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
     rm(beats)
     PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
-    gam_try_catch <- tryCatch(
-    {
-      PP_gam <- gam(
-      PP ~ 
-      s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
-      knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
-      splines <- predict(PP_gam, type = "terms")
-      
-      data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
-      
-      cat("Iteration",i, "out of ", iterations,". For case:",case,"\n")
-      
-      rm(PP_data)
-      
+    PP_gam <- gam(
+    PP ~ 
+    s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
+    knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
+    splines <- predict(PP_gam, type = "terms")
+    data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+    cat("Iteration",i, "out of ", iterations,". For case:",case,"\n")
+    rm(PP_data)
     },
     error = function(e){
       skip_to_next <<- TRUE
@@ -293,21 +257,33 @@ process_cases <- function(data){
   ppv_under5 <- data.frame(matrix(NA, nrow = nrow(data)))
   ppv_over8 <- data.frame(matrix(NA, nrow = nrow(data)))
   counter <- 0 
+  break_and_save <- FALSE
   for (caseid in data$caseid){
     counter <- counter + 1 
     closeAllConnections()
+            try_catch <- tryCatch(
+    {
     cat("Importing ART for case:",caseid,"\n")
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
     cat("Importing AWP for case:",caseid,"\n")
-    awp <- VitalDBR::load_case('Primus/AWP', caseid)
+    awp <- VitalDBR::load_case('Primus/AWP', caseid) 
+    },
+    error = function(e){
+      break_and_save <<- TRUE
+      })
+            
+    if(break_and_save) {
+      cat("Something went wrong when loading case:", caseid,"Saving results so far", "\n" )
+      break 
+      } 
     start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
     end <- data$opend[data$caseid==caseid] # - II -
     ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
     rm(art)
     rm(awp)
     len_ppv <- length(ppv_results)
-    ppv_under5[counter,1] <- sum(ppv_results<=5)/len_ppv
-    ppv_over8[counter,1] <- sum(ppv_results>=8)/len_ppv
+    ppv_under5[counter, 1] <- sum(ppv_results<=5)/len_ppv
+    ppv_over8[counter, 1] <- sum(ppv_results>=8)/len_ppv
   }
   colnames(ppv_under5) <- c('ppv_under5')
   colnames(ppv_over8) <- c('ppv_over8')
@@ -321,11 +297,9 @@ endTime <- Sys.time()
 print(endTime - startTime)
 View(ppv_data)
 #})
-
-
 path <- getwd()
 filename = paste(path, 'df_win_full.csv',sep = '')
-#write.csv(ppv_data, filename)
+write.csv(ppv_data, filename)
 
 ```
 
