@@ -6,6 +6,7 @@ output:
     highlight: github
     math: katex
 ---
+First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
 data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
 icu <- data$icu_days
@@ -23,17 +24,18 @@ sum(data$icu_days==0)/sum(nrow(data))
 ```
 We can actually see that over 60% of our observations are 0.
 
-This calls for some non-standard analysis. But in order to asses the performance of our model, we need to first of all make a baseline. We do that with a simple poisson distribution.
+This calls for some non-standard analysis. But in order to asses the performance of our model, we need to first of all make a baseline. We do that with a simple poisson regression
 
 ## Poisson regression
-
 
 ```{r}
 pois_reg <- glm(icu_days ~ . , data=data, family="poisson")
 summary(pois_reg)
 # 
 ```
-Analyzing the coefficients we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
+(Indsæt analyse af coefficienter)
+
+Analyzing the summary  we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
 
 We can also see that the residual deviance is provided, hence we can do a goodness of fit test for the overall model. (her skal vi læse op på teorien og nok også forklare det, se stack linket under)
 ```{r}
@@ -42,7 +44,7 @@ with(pois_reg, cbind(res.deviance = deviance, df = df.residual,
 ```
 This is REALLY bad haha
 
-It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs without ppv_under5 as a variable:
+It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs without ppv_under5 as a variable. We do that by creating a new model with out ppv_under 5 and doing an ANOVA analysis to test the difference between the two models.
 ```{r}
 ## update m1 model dropping prog
 pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
@@ -57,25 +59,37 @@ Not a lot, but we can still se that ppv_under5 is a significant predictor nevert
 - https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
 
 ## Zero Inflated Poisson
-Now that the baseline is set, we want to see if we can improve that with a more sophisticated model. To do this we use a zero-inflated Poisson distribution. This model is comprised of two different processes. The first of which generates zeros, and the second which is a poisson distribution:
+Now that the baseline is set, we want to see if we can improve that with a more sophisticated model. To do this we use a zero-inflated Poisson distribution. This model is comprised of two different processes. The first of which generates zeros:
 $$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
+Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logistic regression, as it predicts a "probability" between 0 and 1 of observing 0. 
+
+The second is a poisson distribution 
 $$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
-(Indsæt mere teori)
+The $\pi$ present in both models are the mixing coefficient determining how much emphasis we give to each model
+
+
+https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
+
 https://en.wikipedia.org/wiki/Zero-inflated_model
+https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
 
 
-( Måske skal regressions formulaen ændres:
-" Note that we specify that the amount of zero inflation must depend on the predictors - specifying art ~ . | 1 would amount to a zero inflation independent of the regressors." https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
-
+When using a zero-inflated model we can either write the model as:
 ```{r}
 library(pscl)
-zi_pois_reg <- zeroinfl(icu_days ~ ., data=data, dist="poisson")
-# MÅSKE SKAL DET VÆRE:
-# zi_pois_reg <- zeroinfl(icu_days ~ . | 1, data=data, dist="poisson")
-# Se note ovenover
-summary(zi_pois_reg)
-
+zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
 ```
+If we think that the zero-part to be missing at random with a constant probability.
+
+Contrary we can formulate the model as below if we believe the zero-variables are also dependent on the other variables. Which we will assume in this analysis as we believe that our parameters always influences whether patients spent 0 days in the ICU.
+
+```{r}
+zi_pois_reg <- zeroinfl(icu_days ~ .| . , data=data, dist="poisson")
+summary(zi_pois_reg)
+```
+(Indsæt analyse af coefficienter)
+
+
 Lets us compare our current model to a null model:
 
 ```{r}
@@ -83,11 +97,10 @@ zi_pois_reg_null <- update(zi_pois_reg, . ~ 1)
 
 pchisq(2 * (logLik(zi_pois_reg) - logLik(zi_pois_reg_null)), df = 7, lower.tail = FALSE)
 ```
-Ved ikke om det her er sådan: 0.0000000000000000 eller om det er en fejl haha
+Ved ikke om det her er sådan: 0.0000000000000000000000 eller om jeg har lavet en fejl
 
 
-Now let us compare this model to the normal poisson regression:
-
+Now let us compare this model to the normal poisson regression, we do that with a Vuong closeness statistic. The statistic tests the null hypothesis that the two models are equally close to the true data generating process, against the alternative that one model is closer. Note that it cannot make any decision whether the "closer" model is the true model. 
 ```{r}
 vuong(pois_reg, zi_pois_reg)
 ```
@@ -97,66 +110,77 @@ Vigtigt vi læser op på hvad en vuong test er :)
 
 https://stats.oarc.ucla.edu/r/dae/zip/
 
-# Compound poisson 
-This means that we should explore the pseudo compound poisson regression as an even more advanced way of modelling our data. 
+# Compound poisson regression
+Now we will explore "compound poisson regression" as an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
 
-A compound distribution is defined as so: 
+Our compound distribution, often referred to as the "Compound Poisson-Gamma distribution" is defined as: 
 $$  Y = \sum_i^T X_i$$
 Where
 $$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \gamma), \ \ T \perp X_{i}$$
 Where $\perp$ means independence between two random variables.
 
-The reason why this formulation is so powerful, is that when $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at 0. 
+To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. 
+
+This is also the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin, 0. This is in contrast with the zero inflated model, where p(X=0) is not clearly defined
 
 This means that we can model our dependent variable as:
 $$ Y \sim CPois(\mu_i, \phi, \rho)$$
 Where the parameters are defined as so:
-$\mu$ 
-- $\mu = E(Y)$ is the mean, and is equal to the design matrix and the regression coefficients through a link function $\eta$ as so: $\eta (\mu) = X \beta$. 
-$\phi$ 
-- Is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
-$\rho$
-- Is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated here: https://en.wikipedia.org/wiki/Tweedie_distribution under "related distributions", the index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
+
+- $\mu = E(Y)$ is the mean, and is equal to the design matrix and the regression coefficients through a link function $\eta$ as so: $\eta (\mu) = X \beta$. The link function is set to logarithmic. 
+
+- $\phi$  is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
+
+- $\rho$ is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated here: https://en.wikipedia.org/wiki/Tweedie_distribution under "related distributions", the index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
 
 
 https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
 https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
 
+We can do a compound poisson regression using the library "CPLM" 
 ```{r}
 library(cplm)
-pdc_pois_reg <- cpglm(icu_days ~ . , data = data)
+pdc_pois_reg <- cpglm(icu_days ~ . , data = data, link = "log")
 summary(pdc_pois_reg)
 ```
 
+(Indsæt analyse af coefficienter)
 
-
-
-
-
-
-
-
-
+## Graphical overview of density functions
+If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset. 
+Therefore to get an idea of what the density could look like in a zero-inflated model we can use the package "rethinking" (from the famous bayesian book "Statiscical Rethinking" by Richard Mc Elreath) to plot the distribution given the probability of observing 0 and the mean of the distribution.
 
 ```{r}
+# It is a bit cumbersome to install but here is what you need:
+#-----------------------
+# devtools::install_github("stan-dev/cmdstanr")
+# install.packages(c("coda","mvtnorm","devtools","loo","dagitty"))
+# devtools::install_github("rmcelreath/rethinking")
+# install_cmdstan() 
+#------------------------
+library(rethinking)
 library(tweedie)
-
 mu  <- mean(icu)
 xi = pdc_pois_reg$p
 phi = pdc_pois_reg$phi
 hist(icu, breaks=83, freq = FALSE)
-x <- seq(0, 82,0.01)
+x <- seq(0, 82)
 lines(x, dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
+
 lines(dpois(x=0:82,lambda=mu),type="l", col="blue") # Normal poisson
-# Probably cant estimate density of zero inflated poisson parametrically
+
+p = sum(data$icu_days==0)/sum(nrow(data))
+lines(dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Inflated poisson
+
+
 ```
+
+
 
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
 
 
 
 ## TO DO:
-- mere teori til zero inflated poisson. Vi skal lige have styr på de der to årsager til nuller
+- Forklare coefficienter
 - forklaring af residual deviance vs null deviance (se stack link)
-- mere teori til vuong
-- mere teori til compound poisson
