@@ -1,25 +1,38 @@
 ---
 title: "Statistical Analysis"
-author: "Georg"
-date: "5/21/2022"
-output: html_document
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+    math: katex
 ---
 ```{r}
 data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
-data
+icu <- data$icu_days
+head(data)
 ```
+First of all, inspecting our dependent variabel, we see that it doesn't follow a normal distribution:
 ```{r}
-plot(data$icu_days, data$ppv_under5)
+table(data$icu_days)
+hist(data$icu_days, breaks=82)
 ```
+It seems to follow a poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
+But taking a closer look, we see that there are way to many 0-observations for it to be a simple poisson distribution. 
+```{r}
+sum(data$icu_days==0)/sum(nrow(data))
+```
+We can actually see that over 60% of our observations are 0.
+
+This calls for some non-standard analysis. But in order to asses the performance of our model, we need to first of all make a baseline. We do that with a simple poisson distribution.
+
+## Poisson regression
 
 
-## Normal Poisson regression
 ```{r}
 pois_reg <- glm(icu_days ~ . , data=data, family="poisson")
 summary(pois_reg)
 # 
 ```
-
 Analyzing the coefficients we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
 
 We can also see that the residual deviance is provided, hence we can do a goodness of fit test for the overall model. (her skal vi læse op på teorien og nok også forklare det, se stack linket under)
@@ -29,7 +42,7 @@ with(pois_reg, cbind(res.deviance = deviance, df = df.residual,
 ```
 This is REALLY bad haha
 
-It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs with out ppv_under5 as a variable:
+It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs without ppv_under5 as a variable:
 ```{r}
 ## update m1 model dropping prog
 pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
@@ -40,14 +53,26 @@ Not a lot, but we can still se that ppv_under5 is a significant predictor nevert
 
 - https://stats.oarc.ucla.edu/r/dae/poisson-regression/
 - https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
-
-
-
-
+- https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
+- https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
 
 ## Zero Inflated Poisson
+Now that the baseline is set, we want to see if we can improve that with a more sophisticated model. To do this we use a zero-inflated Poisson distribution. This model is comprised of two different processes. The first of which generates zeros, and the second which is a poisson distribution:
+$$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
+$$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
+(Indsæt mere teori)
+https://en.wikipedia.org/wiki/Zero-inflated_model
+
+
+( Måske skal regressions formulaen ændres:
+" Note that we specify that the amount of zero inflation must depend on the predictors - specifying art ~ . | 1 would amount to a zero inflation independent of the regressors." https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
+
 ```{r}
+library(pscl)
 zi_pois_reg <- zeroinfl(icu_days ~ ., data=data, dist="poisson")
+# MÅSKE SKAL DET VÆRE:
+# zi_pois_reg <- zeroinfl(icu_days ~ . | 1, data=data, dist="poisson")
+# Se note ovenover
 summary(zi_pois_reg)
 
 ```
@@ -64,23 +89,74 @@ Ved ikke om det her er sådan: 0.0000000000000000 eller om det er en fejl haha
 Now let us compare this model to the normal poisson regression:
 
 ```{r}
-vuong(pois_reg ,zi_pois_reg)
+vuong(pois_reg, zi_pois_reg)
 ```
 We can see that the Vuong z-statistic is significant, which means that model 2 (zeroinflated) is better than model 1 (regular)
 
 Vigtigt vi læser op på hvad en vuong test er :)
 
-
-
-Her tænker jeg vi skal lave noget bootstrap ci for at finde incident risk ratio of odds ratio. Tjek linket under 
-
-
 https://stats.oarc.ucla.edu/r/dae/zip/
 
-# pseudo discrete compound poisson 
+# Compound poisson 
+This means that we should explore the pseudo compound poisson regression as an even more advanced way of modelling our data. 
+
+A compound distribution is defined as so: 
+$$  Y = \sum_i^T X_i$$
+Where
+$$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \gamma), \ \ T \perp X_{i}$$
+Where $\perp$ means independence between two random variables.
+
+The reason why this formulation is so powerful, is that when $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at 0. 
+
+This means that we can model our dependent variable as:
+$$ Y \sim CPois(\mu_i, \phi, \rho)$$
+Where the parameters are defined as so:
+$\mu$ 
+- $\mu = E(Y)$ is the mean, and is equal to the design matrix and the regression coefficients through a link function $\eta$ as so: $\eta (\mu) = X \beta$. 
+$\phi$ 
+- Is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
+$\rho$
+- Is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated here: https://en.wikipedia.org/wiki/Tweedie_distribution under "related distributions", the index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
+
+
+https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
+https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
+
 ```{r}
 library(cplm)
 pdc_pois_reg <- cpglm(icu_days ~ . , data = data)
 summary(pdc_pois_reg)
 ```
 
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(tweedie)
+
+mu  <- mean(icu)
+xi = pdc_pois_reg$p
+phi = pdc_pois_reg$phi
+hist(icu, breaks=83, freq = FALSE)
+x <- seq(0, 82,0.01)
+lines(x, dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
+lines(dpois(x=0:82,lambda=mu),type="l", col="blue") # Normal poisson
+# Probably cant estimate density of zero inflated poisson parametrically
+```
+
+https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
+
+
+
+## TO DO:
+- mere teori til zero inflated poisson. Vi skal lige have styr på de der to årsager til nuller
+- forklaring af residual deviance vs null deviance (se stack link)
+- mere teori til vuong
+- mere teori til compound poisson
