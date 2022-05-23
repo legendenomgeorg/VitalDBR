@@ -6,6 +6,30 @@ output:
     highlight: github
     math: katex
 ---
+```{r}
+#From CRAN
+library(vcd)
+library(MASS)
+library(rcompanion)
+library(jtools)
+library(rlang)
+library(broom.mixed)
+library(pscl)
+library(cplm)
+library(tweedie)
+library(performance)
+
+# It is a bit cumbersome to install  "rethinking" but here is what you need:
+#-----------------------
+# devtools::install_github("stan-dev/cmdstanr")
+# install.packages(c("coda","mvtnorm","devtools","loo","dagitty"))
+# devtools::install_github("rmcelreath/rethinking")
+# install_cmdstan() 
+#------------------------
+library(rethinking)
+```
+
+
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
 data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
@@ -17,8 +41,6 @@ First of all, inspecting our dependent variable, we see that it doesn't follow a
 table(data$icu_days)
 hist(data$icu_days, breaks=82)
 ```
-
-
 
 It seems to follow a poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 But taking a closer look, we see that there are way to many 0-observations for it to be a simple poisson distribution. 
@@ -40,8 +62,8 @@ When the variance is larger than the mean, we are working with what is called an
 Due to the nature of our data, it is probably either the poisson or negative binomial that best describes it. We can check which one is likely to be the best from this ord plot:
 
 ```{r}
-library(vcd)
-Ord_plot(data$icu_days)
+
+vcd::Ord_plot(data$icu_days)
 ```
 (plot skal forklares)
 Since we have a positive slope and a negative intercept, we can assume that the data is best fit by a negative binomial distribution, according to https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/ordplot.htm
@@ -70,8 +92,8 @@ We can see that the heavy tail of our distribution skews the qqplot.
 
 
 ```{r}
-library(MASS)
-nbin_reg <- glm.nb(icu_days ~ . , data=data)
+
+nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
 summary(nbin_reg)
 ```
 We would like to perform a goodness of fit test, b
@@ -96,17 +118,6 @@ with(pois_reg, cbind(res.deviance = deviance, df = df.residual,
 ```
 This is REALLY bad haha
 
-It seems like ppv under 5 is pretty significant, so lets compare how much worse the model performs without ppv_under5 as a variable. We do that by creating a new model with out ppv_under 5 and doing an ANOVA analysis to test the difference between the two models.
-```{r}
-## update m1 model dropping prog
-pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
-## test model differences with chi square test
-anova(pois_reg2, pois_reg, test="Chisq")
-```
-Not a lot, but we can still se that ppv_under5 is a significant predictor nevertheless
-Altså her vil jeg stille mig lidt kritisk og sige at jeg faktisk ikke tror man kan bruge anova til poisson data, da det ikke lever op til assumptions, ogås selvom de bruger det i artiklen
-
-
 
 - https://stats.oarc.ucla.edu/r/dae/poisson-regression/
 - https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
@@ -115,23 +126,17 @@ Altså her vil jeg stille mig lidt kritisk og sige at jeg faktisk ikke tror man 
 
 
 ## Inspecting baseline
-
+We have now fitted three different relatively basic models, and it is now time to try and give an overview over how well they each perfom.
 ```{r}
-library(rcompanion)
-library(jtools)
-compareGLM(linear_model, nbin_reg, pois_reg)
-
+rcompanion::compareGLM(linear_model, nbin_reg, pois_reg)
 ```
+(skal fortolkes)
 
+
+We can also plot the estimates and stadard deviations for each parameter in the models
 ```{r}
-library(rlang)
-library(broom.mixed)
-
-plot_summs(linear_model, nbin_reg, pois_reg)
+jtools::plot_summs(linear_model, nbin_reg, pois_reg)
 ```
-
-
-
 
 ## Zero Inflated Poisson
 Now that the baseline is set, we want to see if we can improve that with a more sophisticated model. To do this we use a zero-inflated Poisson distribution. This model is comprised of two different processes. The first of which generates zeros:
@@ -151,8 +156,8 @@ https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simula
 
 When using a zero-inflated model we can either write the model as:
 ```{r}
-library(pscl)
-zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
+
+pscl::zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
 ```
 If we think that the zero-part to be missing at random with a constant probability.
 
@@ -164,6 +169,14 @@ summary(zi_pois_reg)
 ```
 (Indsæt analyse af coefficienter)
 
+
+```{r}
+E2 <- resid(zi_pois_reg, type = "pearson")
+N  <- nrow(data)
+p  <- length(coef(zi_pois_reg)) + 1 # '+1' is due to theta
+sum(E2^2) / (N - p)
+```
+Should be 1, our model is overdispersed
 
 Lets us compare our current model to a null model:
 
@@ -177,13 +190,55 @@ Ved ikke om det her er sådan: 0.0000000000000000000000 eller om jeg har lavet e
 
 Now let us compare this model to the normal poisson regression, we do that with a Vuong closeness statistic. The statistic tests the null hypothesis that the two models are equally close to the true data generating process, against the alternative that one model is closer. Note that it cannot make any decision whether the "closer" model is the true model. 
 ```{r}
-vuong(pois_reg, zi_pois_reg)
+pscl::vuong(pois_reg, zi_pois_reg)
 ```
 We can see that the Vuong z-statistic is significant, which means that model 2 (zeroinflated) is better than model 1 (regular)
 
 Vigtigt vi læser op på hvad en vuong test er :)
 
 https://stats.oarc.ucla.edu/r/dae/zip/
+
+# Zero inflated negative binomial
+Now, we would like to check if there is overdispersion in the count part (ie. non-zero) part of our poisson regression. We do that by doing a zero inflated negative binomial regression instead. If te 
+
+
+```{r}
+zi_nbin_reg <- zeroinfl(icu_days ~ .| . , data=data, dist="negbin")
+summary(zi_nbin_reg)
+```
+Udregner dispersion statistic
+```{r}
+E2 <- resid(zi_nbin_reg, type = "pearson")
+N  <- nrow(data)
+p  <- length(coef(zi_nbin_reg)) + 1 # '+1' is due to theta
+sum(E2^2) / (N - p)
+```
+
+Very close to 1 which is good
+
+```{r}
+pscl::vuong(nbin_reg, zi_nbin_reg)
+```
+Den her er ikke entydigt bedre
+
+
+```{r}
+zi_nbin_reg_null <- update(zi_pois_reg, . ~ 1)
+
+pchisq(2 * (logLik(zi_nbin_reg) - logLik(zi_nbin_reg_null)), df = 7, lower.tail = FALSE)
+```
+Igen tror jeg der er noget galt
+
+# Comparing zero inflated models
+```{r}
+library(lmtest)
+lrtest(zi_pois_reg, zi_nbin_reg )
+```
+The test shows that the second model (zero inflated negative binomial) is the best, on all levels of significance
+
+
+
+
 
 # Compound poisson regression
 Now we will explore "compound poisson regression" as an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
@@ -214,33 +269,28 @@ https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
 
 We can do a compound poisson regression using the library "CPLM" 
 ```{r}
-library(cplm)
-pdc_pois_reg <- cpglm(icu_days ~ . , data = data, link = "log")
-summary(pdc_pois_reg)
+
+c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
+summary(c_pois_reg)
 ```
 
 (Indsæt analyse af coefficienter)
+
+# Comparing all models
 
 ## Graphical overview of density functions
 If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset as the function is not defined at 0.  (NEEDS CITATION). 
 Therefore to get an idea of what the density could look like in a zero-inflated model we can use the package "rethinking" (from the famous bayesian book "Statiscical Rethinking" by Richard Mc Elreath) to plot the distribution given the probability of observing 0 and the mean of the distribution.
 
 ```{r}
-# It is a bit cumbersome to install  "rethinking" but here is what you need:
-#-----------------------
-# devtools::install_github("stan-dev/cmdstanr")
-# install.packages(c("coda","mvtnorm","devtools","loo","dagitty"))
-# devtools::install_github("rmcelreath/rethinking")
-# install_cmdstan() 
-#------------------------
-library(rethinking)
-library(tweedie)
+
+
 mu  <- mean(icu)
-xi = pdc_pois_reg$p
-phi = pdc_pois_reg$phi
+xi = c_pois_reg$p
+phi = c_pois_reg$phi
 hist(icu, breaks=83, freq = FALSE)
 x <- seq(0, 82)
-lines(x, dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
+lines(x, tweedie::dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
 
 lines(dpois(x=x,lambda=mu),type="l", col="blue") # Normal poisson
 
@@ -248,12 +298,24 @@ dispersion <- nbin_reg$theta
 lines(dnbinom(x, size = dispersion, mu = mu ),type="l", col="orange") # Negative binomial
 
 p = sum(data$icu_days==0)/sum(nrow(data))
-lines(dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Inflated poisson
+lines(rethinking::dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Inflated poisson
+library(countreg)
 
+lines(countreg::dzinbinom(x=x, mu=mu, theta = zi_nbin_reg$theta, pi= p), type="l", col="darkorchid1") # Zero Inflated negative binomial
+# er ikke sikker på mu parameteren i den sidste
 
 ```
 
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
+
+# AIC (Akaika information criteria)
+```{r}
+#install.packages("performance")
+
+performance::compare_performance(linear_model, pois_reg, nbin_reg, zi_pois_reg, zi_nbin_reg, c_pois_reg, rank=TRUE)
+```
+Her er jeg i tvivl om om hvad RMSE egentlig siger i den her sammenhæng. Er ikke sikker på den holder på andet end lineær regression.
+Måske er det bedre at måle noget prediction?
 
 ## Discussion of confounders
 
@@ -262,3 +324,5 @@ https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisso
 - Forklare coefficienter
 - forklaring af residual deviance vs null deviance (se stack link)
 - vigtigt at vi konkluderer på om det rent faktisk blir bedre
+- analyser ALLE coefficenter med exp(coef(model)) https://rpubs.com/kaz_yos/pscl-2
+- Vi skal finde en måde at sammenligne de mere komplicerede modeller
