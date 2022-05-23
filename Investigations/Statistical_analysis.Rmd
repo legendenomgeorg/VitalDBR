@@ -308,14 +308,25 @@ lines(countreg::dzinbinom(x=x, mu=mu, theta = zi_nbin_reg$theta, pi= p), type="l
 
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
 
-# AIC (Akaika information criteria)
+# comparing
+
+In general you would like to compare models by AIC or similar, but since the comp
 ```{r}
 #install.packages("performance")
 
 performance::compare_performance(linear_model, pois_reg, nbin_reg, zi_pois_reg, zi_nbin_reg, c_pois_reg, rank=TRUE)
 ```
-Her er jeg i tvivl om om hvad RMSE egentlig siger i den her sammenhæng. Er ikke sikker på den holder på andet end lineær regression.
-Måske er det bedre at måle noget prediction?
+Her er jeg i tvivl om om hvor den får RMSE fra, da det jo er udfra predicted values...
+
+Vi kan også sammenligne "Deviance" men ikke for de zero inflated models, da deviance er en GLM ting
+
+```{r}
+c_pois_reg$deviance
+linear_model$deviance
+pois_reg$deviance
+nbin_reg$deviance
+```
+Vi kunne også køre test/validation set opdeling? 
 
 ## Discussion of confounders
 
