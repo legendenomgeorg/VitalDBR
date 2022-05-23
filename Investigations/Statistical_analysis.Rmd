@@ -12,11 +12,14 @@ data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
 icu <- data$icu_days
 head(data)
 ```
-First of all, inspecting our dependent variabel, we see that it doesn't follow a normal distribution:
+First of all, inspecting our dependent variable, we see that it doesn't follow a normal distribution:
 ```{r}
 table(data$icu_days)
 hist(data$icu_days, breaks=82)
 ```
+
+
+
 It seems to follow a poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 But taking a closer look, we see that there are way to many 0-observations for it to be a simple poisson distribution. 
 ```{r}
@@ -24,18 +27,67 @@ sum(data$icu_days==0)/sum(nrow(data))
 ```
 We can actually see that over 60% of our observations are 0.
 
-This calls for some non-standard analysis. But in order to asses the performance of our model, we need to first of all make a baseline. We do that with a simple poisson regression
+Furthermore, we can also observe that the mean is not equal to the variance:
+```{r}
+mean(icu)
+var(icu)
+```
+This violates the properties of the poisson distribution, where $$E(X) = VAR(X) = \lambda, \ \ X \sim poisson(\lambda)$$
+When the variance is larger than the mean, we are working with what is called an "over-dispersed" model, which further incentivises us to look into more advanced modelling
+
+
+
+Due to the nature of our data, it is probably either the poisson or negative binomial that best describes it. We can check which one is likely to be the best from this ord plot:
+
+```{r}
+library(vcd)
+Ord_plot(data$icu_days)
+```
+(plot skal forklares)
+Since we have a positive slope and a negative intercept, we can assume that the data is best fit by a negative binomial distribution, according to https://www.itl.nist.gov/div898/software/dataplot/refman1/auxillar/ordplot.htm
+We still have to consider that this difference is due to the large amount of zeros, which generally fits better to the negative binomial than the poisson. We will still consider the poisson distribution, as we will look an advanced variations of it that take too many zeroes into consideration.
+
+
+(gode diagnostics til count data)
+ - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
+
+
+The diagnostics above call for some non-standard analysis. But in order to asses the performance of our model, we need to first of all make a baseline. We do that first with a regular linear regression and a negative binomial generalized linear model and then a poisson generalized linear model. 
+
+## Linear Regression
+```{r}
+#Note this is just a normal linear regression, but we want it to be of same type as the others for later
+summary(linear_model <- glm(icu_days ~ . , data=data,family="gaussian"), link="identity")
+```
+(Forklar coefficienter)
+
+```{r}
+r = linear_model$residuals
+qqnorm(r,ylab="Residuals")
+qqline(r)
+```
+We can see that the heavy tail of our distribution skews the qqplot. 
+
+
+```{r}
+library(MASS)
+nbin_reg <- glm.nb(icu_days ~ . , data=data)
+summary(nbin_reg)
+```
+We would like to perform a goodness of fit test, b
+Sys det her virker knast
 
 ## Poisson regression
 
 ```{r}
 pois_reg <- glm(icu_days ~ . , data=data, family="poisson")
 summary(pois_reg)
-# 
 ```
 (Indsæt analyse af coefficienter)
 
 Analyzing the summary  we can first of all see that we are struggling with some sort of assumption violation, since the median of the standard errors are -0.9342 which is not 0 as expected, we hope that using a zero inflated poisson regression later will lower this number.
+
+
 
 We can also see that the residual deviance is provided, hence we can do a goodness of fit test for the overall model. (her skal vi læse op på teorien og nok også forklare det, se stack linket under)
 ```{r}
@@ -52,11 +104,34 @@ pois_reg2 <- update(pois_reg, . ~ . - ppv_under5)
 anova(pois_reg2, pois_reg, test="Chisq")
 ```
 Not a lot, but we can still se that ppv_under5 is a significant predictor nevertheless
+Altså her vil jeg stille mig lidt kritisk og sige at jeg faktisk ikke tror man kan bruge anova til poisson data, da det ikke lever op til assumptions, ogås selvom de bruger det i artiklen
+
+
 
 - https://stats.oarc.ucla.edu/r/dae/poisson-regression/
 - https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
 - https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
 - https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
+
+
+## Inspecting baseline
+
+```{r}
+library(rcompanion)
+library(jtools)
+compareGLM(linear_model, nbin_reg, pois_reg)
+
+```
+
+```{r}
+library(rlang)
+library(broom.mixed)
+
+plot_summs(linear_model, nbin_reg, pois_reg)
+```
+
+
+
 
 ## Zero Inflated Poisson
 Now that the baseline is set, we want to see if we can improve that with a more sophisticated model. To do this we use a zero-inflated Poisson distribution. This model is comprised of two different processes. The first of which generates zeros:
@@ -147,11 +222,11 @@ summary(pdc_pois_reg)
 (Indsæt analyse af coefficienter)
 
 ## Graphical overview of density functions
-If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset. 
+If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset as the function is not defined at 0.  (NEEDS CITATION). 
 Therefore to get an idea of what the density could look like in a zero-inflated model we can use the package "rethinking" (from the famous bayesian book "Statiscical Rethinking" by Richard Mc Elreath) to plot the distribution given the probability of observing 0 and the mean of the distribution.
 
 ```{r}
-# It is a bit cumbersome to install but here is what you need:
+# It is a bit cumbersome to install  "rethinking" but here is what you need:
 #-----------------------
 # devtools::install_github("stan-dev/cmdstanr")
 # install.packages(c("coda","mvtnorm","devtools","loo","dagitty"))
@@ -167,7 +242,10 @@ hist(icu, breaks=83, freq = FALSE)
 x <- seq(0, 82)
 lines(x, dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
 
-lines(dpois(x=0:82,lambda=mu),type="l", col="blue") # Normal poisson
+lines(dpois(x=x,lambda=mu),type="l", col="blue") # Normal poisson
+
+dispersion <- nbin_reg$theta
+lines(dnbinom(x, size = dispersion, mu = mu ),type="l", col="orange") # Negative binomial
 
 p = sum(data$icu_days==0)/sum(nrow(data))
 lines(dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Inflated poisson
@@ -175,12 +253,12 @@ lines(dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Infla
 
 ```
 
-
-
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
 
+## Discussion of confounders
 
 
 ## TO DO:
 - Forklare coefficienter
 - forklaring af residual deviance vs null deviance (se stack link)
+- vigtigt at vi konkluderer på om det rent faktisk blir bedre
