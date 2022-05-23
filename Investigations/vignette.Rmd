@@ -16,7 +16,7 @@ When this dataset is built, we use the results to do a poisson regression regres
 # Fitting a gam
 ## Preparing everything
 Before we get started, we need a couple of packages. 
-```{r}
+```{r,message=FALSE}
 # This is how you install VitalDBR!
 #install_github('legendenomgeorg/VitalDBR/VitalDBR', build=T,build_vignettes = TRUE)
 #install.packages("/Users/geo/repo/VitalDBR/VitalDBR/", repo=NULL, type = "source")
