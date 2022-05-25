@@ -50,7 +50,7 @@ But we will continue working in the data.frame format for this vignette.
 
 To make sure that we work with the same data through out the entire vignette, we start out by defining an interval we want to work on
 ```{r}
-start = 10000 # Interval starts at 10000 seconds
+start = 2000 # Interval starts at 10000 seconds
 sec = 30 # Last 30 seconds from 10000. Such that the interval is now 10000 sec to 10030 sec
 ```
 
