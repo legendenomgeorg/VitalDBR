@@ -42,7 +42,6 @@ tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
     count(caseid) %>%
     dplyr::filter(n == 2)
 
-
 ```
 
 ```{r}
@@ -309,4 +308,21 @@ process_cases <- function(data){
 # as.tibble: Time difference of 41.2858 secs
 #View(ppv_data)
 ```
+
+
+```{r}
+full <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+merged2 <- merge(x=merged,y=full,by="caseid") 
+#merged
+```
+
+```{r}
+# Fjern de her operationer
+full %>% select("preop_ecg") %>% dplyr::filter(preop_ecg != "Normal Sinus Rhythm")
+
+```
+```{r}
+full
+```
+
 

@@ -33,10 +33,31 @@ library(rethinking)
 
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
-data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3,10,11)]
+data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3)]
+data <- 
+# knife_time (opend - opstart)
+# anediff (aneend - anestart)-knife_time
+# optype 
+# Komorbiditet: 
+# preop_htn, preop_dm,preop_arrhythmia, preop_pft (sundhed før operation)
+# preop_cr (nyrer),  
+# preop_ast, preop_alt (lever) #kun en af dem da det er meget korrelerede
+# summen af colloider og crystalloider (hvor meget iv væske) meget væske vil gøre ppv lav og det er associeret med et dårligt outcome
 icu <- data$icu_days
 head(data)
 ```
+
+```{r}
+full <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+# Fjern de her operationer, da de invaliderer gam modellering (pulstryksvariationen)
+# Fjerner de operationer, der har atrie-flimmer
+full %>% select("caseid", "preop_ecg") %>% dplyr::filter(preop_ecg != "Normal Sinus Rhythm")
+```
+
+
+
+
+
 First of all, inspecting our dependent variable, we see that it doesn't follow a normal distribution:
 ```{r}
 table(data$icu_days)
