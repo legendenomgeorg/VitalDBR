@@ -1,0 +1,36 @@
+---
+title: "fixed-data"
+output: html_document
+---
+
+```{r}
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+cases 
+
+
+cases 
+# Komorbiditet: 
+# preop_htn, preop_dm,preop_arrhythmia, preop_pft (sundhed før operation)
+# preop_cr (nyrer),  
+# preop_ast, preop_alt (lever) #kun en af dem da det er meget korrelerede
+# summen af colloider og crystalloider (hvor meget iv væske) meget væske vil gøre ppv lav og det er associeret med et dårligt outcome
+```
+
+
+```{r}
+data <- read.csv("../Investigationsdf_win_full.csv")
+data$knife_time <- (data$opend - data$opstart) / 3600
+#data$anadiff <- (data$)
+#data <- 
+# knife_time (opend - opstart)
+# anediff (aneend - anestart)-knife_time
+# optype 
+# Komorbiditet: 
+# preop_htn, preop_dm,preop_arrhythmia, preop_pft (sundhed før operation)
+# preop_cr (nyrer),  
+# preop_ast, preop_alt (lever) #kun en af dem da det er meget korrelerede
+# summen af colloider og crystalloider (hvor meget iv væske) meget væske vil gøre ppv lav og det er associeret med et dårligt outcome
+icu <- data$icu_days
+head(data)
+```
+

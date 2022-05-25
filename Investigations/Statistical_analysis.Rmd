@@ -18,7 +18,6 @@ library(pscl)
 library(cplm)
 library(tweedie)
 library(performance)
-library(countreg)
 
 # It is a bit cumbersome to install  "rethinking" but here is what you need:
 #-----------------------
@@ -33,8 +32,16 @@ library(rethinking)
 
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
-data <- read.csv("../Investigationsdf_win_full.csv")[,-c(1,2,3)]
-data <- 
+data <- read.csv("../Investigationsdf_win_full.csv")
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+cases <- cases %>% select('caseid', 'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 'preop_pft', 'preop_cr', 'preop_ast', 'preop_alt')
+
+merged <- merge(x=data,y=cases,by="caseid")
+merged$knife_time <- (merged$opend - merged$opstart) / 3600
+merged$anediff <- ((merged$aneend - merged$anestart) - merged$knife_time) / 3600
+
+data <- merged %>% select(-'X', -'aneend', -'anestart', -'opend', -'opstart') %>% filter(preop_ecg == "Normal Sinus Rhythm")
+data <- mutate_if(data, is.character, as.factor) %>% select(-'caseid', -'death_inhosp', -'preop_ecg')
 # knife_time (opend - opstart)
 # anediff (aneend - anestart)-knife_time
 # optype 
