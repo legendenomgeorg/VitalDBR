@@ -187,5 +187,5 @@ pp_plot_insp <- function(beats_indexed_data) {
 #' @param beats_indexed_data
 #' @param insp_start_data
 pp_plot_color_and_index <- function(beats_indexed_data, insp_start_data) {
-  pp_plot_color(beats_indexed, insp_start) + pp_plot_insp(beats_indexed) +  plot_annotation(title = 'Pulse Pressure', subtitle = '- where color indactes repsiratory cycle -') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+  pp_plot_color(beats_indexed, insp_start) + pp_plot_insp(beats_indexed) +  plot_annotation(title = 'Pulse Pressure', subtitle = '- where color indicates repsiratory cycle -') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 }

@@ -69,18 +69,6 @@ knitr::kable(head(sub_awp))
 
 We now have the right subset of our AWP data, and we can simply plot it like so:
 ```{r ,fig.width = 14}
-plot_awp <- function(awp_data, add_insp_start = 'no', insp_start_data = NULL) {
-  if (add_insp_start != 'no') {
-    ggplot(sub_awp, aes(Time, Primus.AWP)) + geom_line() +theme_classic() + labs(title = 'Airway Pressure Wave \n with Inspiration Start', x = 'Time (sec)', y = 'AWP (hPa)') + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino')) + geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-data = insp_start_data)
-    }
-  
-  else {
-    ggplot(sub_awp, aes(Time, Primus.AWP)) + geom_line() +theme_classic() + labs(title = 'Airway Pressure Wave', x = 'Time (sec)', y = 'AWP (hPa)') + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
-  }
-}
-
-
 plot_awp(awp_data = sub_awp)
 ```
 
@@ -130,42 +118,12 @@ knitr::kable(head(beats))
 
 Now we plot the Arterial blood pressure, together with the peaks and the inspiration:
 ```{r fig.width = 12, fig.align="center"}
-
-plot_art <- function(art_data, insp_start_data, beats_data) {
-ggplot(sub_art, aes(Time, SNUADC.ART)) +
-geom_line() +
-geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-data = insp_start_data) + 
-geom_point(aes(x = time,
-    y = dia,
-    colour = "Diastole"),
-    data = beats_data, size = 5) +
-  geom_point(aes(x = time_systole,
-    y = sys,
-    colour = "Systole"), size = 5,
-    data = beats_data) +
-    theme_classic() +
-    labs(title = 'Arterial Pressure Waveform', x = 'Time (sec)', y = 'ART (mmHg)') + 
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino')) +
-    labs(color='Type') 
-}
-
 plot_art(sub_art, insp_start, beats)
-
 ```
 Beautiful, right? 
 
 We can also plot the pulse pressure with the inspiration. NOTE: As the pulse pressure is a discrete measurement, this is plotted with a linear line interpolation.
 ```{r fig.width = 12, fig.align="center"}
-pp_plot <- function(insp_start_data, beats_data) {
-  ggplot(beats_data, aes(time, PP)) +
-  geom_line() +
-  geom_point() +
-  geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-data = insp_start_data) + theme_classic() + labs(title = 'Pulse Pressure', x = 'Time (sec)', y = 'PP (mmHg)') + 
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
-}
-
 pp_plot(insp_start, beats)
 
 ```
@@ -182,31 +140,6 @@ knitr::kable(head(beats_indexed))
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
 
 ```{r fig.width = 12, fig.align="center"}
-pp_plot_insp <- function(beats_indexed_data) {
-  ggplot(beats_indexed_data,
-aes(ann_rel_index, PP, group = as.factor(ann_n), color = as.factor(ann_n))) +
-geom_line(alpha = 0.4, show.legend = FALSE) +
-# insp_n is a unique (consecutive) number for each respiratory cycle
-geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) + theme_classic() + labs(title = 'By position in the respiratory cycle', x = 'Index to Inspiration Start (Relative)', y = 'PP (mmHg)') + 
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))}
-
-
-pp_plot_color <- function(beats_indexed_data, insp_start_data) {
-  ggplot(beats_indexed, aes(time, PP)) +
-  geom_line() +
-  # insp_n is a unique (consecutive) number for each respiratory cycle
-  geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) +
-  geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-data = insp_start_data) + theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') + 
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
-  
-}
-
-
-pp_plot_color_and_index <- function(beats_indexed_data, insp_start_data) {
- pp_plot_color(beats_indexed, insp_start) + pp_plot_insp(beats_indexed) +  plot_annotation(title = 'Pulse Pressure', subtitle = '- where color indactes repsiratory cycle -') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))  
-}
-
 pp_plot_color_and_index(beats_indexed, insp_start)
 ```
 
