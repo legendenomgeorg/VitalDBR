@@ -19,6 +19,9 @@ library(cplm)
 library(tweedie)
 library(performance)
 library("tidyverse")
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
 
 # It is a bit cumbersome to install  "rethinking" but here is what you need:
 #-----------------------
@@ -33,24 +36,33 @@ library(rethinking)
 
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
-data <- read.csv("../Investigationsdf_win_full.csv")
+data <- read.csv("../Investigationsdf30.csv")
 cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
-cases <- cases %>% select('caseid', 'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 'preop_pft', 'preop_cr', 'preop_alt')
-
+cases <- cases %>% select('caseid', 'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 'preop_pft', 'preop_cr', 'preop_alt', 'optype')
 merged <- merge(x=data,y=cases,by="caseid")
 merged$knife_time <- (merged$opend - merged$opstart) / 3600
-#merged$anediff <- ((merged$aneend - merged$anestart) - merged$knife_time) / 3600
-
 data <- merged %>% select(-'X', -'aneend', -'anestart', -'opend', -'opstart') %>% filter(preop_ecg == "Normal Sinus Rhythm")
 data <- mutate_if(data, is.character, as.factor) %>% select(-'caseid', -'death_inhosp', -'preop_ecg')
 data$sex <- ifelse(data$sex=='M', 1,0)
 data$preop_pft <- ifelse(data$preop_pft=='Normal',1, 0)
-#data$anediff <- round(data$anediff, 4)
 data$knife_time <- round(data$knife_time, 4)
 data$ppv_under5 <- round(data$ppv_under5, 4)
 data$ppv_over8 <- round(data$ppv_over8, 4)
+data$ppv_avg_first30 <- round(data$ppv_avg_first30, 4)
+data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
 data$age <- as.integer(data$age)
+data$optype <- as.factor(data$optype)
+##### Remove optype for now
+data <- select(data, -"optype")
+######
+
+#####Hopefully we can remove this with the new data
+data <- data[!(data$ppv_avg_last_30==0),] 
+#####
+
 data <- na.omit(data)
+icu <- data$icu_days 
+
 # knife_time (opend - opstart)
 #anediff <- (aneend - anestart)-knife_time
 # optype 
@@ -59,14 +71,16 @@ data <- na.omit(data)
 # preop_cr (nyrer),  
 # preop_ast, preop_alt (lever) #kun en af dem da det er meget korrelerede
 # summen af colloider og crystalloider (hvor meget iv væske) meget væske vil gøre ppv lav og det er associeret med et dårligt outcome
-icu <- data$icu_days
-head(data)
+
+#View(data)
 ```
+
+
 ## Linear Regression
 First of all we want to set a baseline for our future models, we do this with a linear regression:
 
 ```{r}
-summary(linear_model <- glm(icu_days ~ . , data=data,family="gaussian"), link="identity")
+summary(linear_model <-lm(icu_days ~ . , data=data))
 ```
 
 
@@ -74,65 +88,94 @@ summary(linear_model <- glm(icu_days ~ . , data=data,family="gaussian"), link="i
 
 ```{r}
 r = linear_model$residuals
+par(mfrow=c(1,2))
+plot(icu,r,ylab="Residuals", xlab="Days in ICU")
+abline(0,0)
 qqnorm(r,ylab="Residuals")
 qqline(r)
-```
-We can see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed.
 
-Let's inspect our dependent variable then.  We see that it doesn't follow a normal distribution:
+```
+On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity***, since the variance seems to be dependent on days in ICU. 
+We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This does not invalidate our regression coefficients, but prevents us from using tests like ANOVA, that assume normal errors. ***
+
+As our data breaks various assumptions, we will not comsider the linear regression in our future comparissons, as it is not a valid model.
+
+Let's inspect our dependent variable then.  
 ```{r}
 #table(data$icu_days)
-hist(data$icu_days, breaks=82)
+count <- table(factor(icu, levels = 0:81))/length(icu)
+barplot(count)
+# den her skal også vise halen
 ```
-
-It seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
+We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 But taking a closer look, we see that there are way to many 0-observations for it to be a simple poisson distribution. 
 ```{r}
 sum(data$icu_days==0)/sum(nrow(data))
 ```
 We can actually see that over 60% of our observations are 0. 
-We also see some extremly large values like 82, indicating a distribution with a heavy tail. These things together is probably the reason why our qqplot didn't look normal.
+We also see some extremly large values like 82, indicating a distribution with a heavy tail.
+These things further back the notion that linear regression is not the right choice for this data.
+Therefore we will introduce the idea of Generalized linear models, to combat these problems. 
 
-Furthermore, we can also observe that the mean is not equal to the variance:
+## What is a Generalized Linear Model?
+A standard linear regression fits a model of the form $$Y = X\beta + \epsilon$$ where $\epsilon \sim N(0,S^2)$. We checked above that our regression does not live up to the requirement for $\epsilon$.
+If we remove the $\epsilon$ we can write it as 
+$$ E[Y|X] =\beta X $$
+We can then apply a link function g() to the expected value of Y given X
+$$ g(E[Y|X]) = \beta X  $$
+The link function converts the expected value of our dependent variable to a linear scale.
+This means we can formulate the GLM as:
+$$ E[Y|X] = g^{-1}(\beta X ) $$
+When using GLM's in r, we choose the "family", which decides the link function $g()$ and the appropriate distribution of the errors. When choosing "poisson" as our family, we choose the log function which ensures that as our link function and poisson distribution for our errors.
+When we introduce the log link function to the formula above it becomes
+$$ log(E(Y|X)) = \beta X $$
+$$ E[Y|X] = e^{\beta X} $$
+And when we reintroduce the poisson error term, we get our final model:
+$$ Y \sim Poisson( e^{\beta X} )  $$
+
+
+
+A standard linear regression is just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function.
+
+
+## Poisson GLM
+Even though we probably have too many zeros as we saw earlier, we will still try to use a simple poisson model for our regression:
+```{r}
+summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log")))
+```
+
+```{r}
+sum(pois_reg$residuals)^2/pois_reg$df.residual
+```
+
+----- FORTOLK -------
+
+
+If we do some further investigation, we can also observe that the mean is not equal to the variance:
 ```{r}
 mean(icu)
 var(icu)
 ```
 This violates the properties of the poisson distribution, where $$E(X) = VAR(X) = \lambda, \ \ X \sim poisson(\lambda)$$
-When the variance is larger than the mean, we are working with what is called an "over-dispersed" model, which further incentivises us to look into more advanced modelling
+When the variance is larger than the mean, we are working with as so-called "over-dispersed" model, which further incentivises us to look into more advanced modelling. 
 
 
-## GLM theory
-Before we test for overdispersement, we need to understand GLM's
-------- THEORY ---------
-
-## Testing overdispersement and choosing model
-```{r}
-library(AER)
-pois_reg <- glm(icu_days ~ ., data = data, family='poisson')
-#summary(pois_reg)
-dispersiontest(pois_reg,trafo=1) #Trafo ?? 
-```
-This shows strong evidence of overdispersement as the alpha should be close to 1 for it to not be overdispersed, this means that we should look at a quasi poisson distribution. 
-
-
-
-## Quasi poisson
-(VI FJERNER MÅSKE QUASI POISSON )
-
-The quasi Poisson distribution is a normal poisson distribution, but with an added dispersement parameter.
-
----- Theory ------
+# Overdispersement
+We can test for overdispersement by deviding the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1.
 
 ```{r}
-summary(q_pois_reg <- glm(icu_days ~ ., family=quasipoisson, data=data))
+pois_reg$deviance/pois_reg$df.residual
 ```
+As we can see our model is clearly over dispersed
 
+The reason why we don't want overdispersion, is that when the model is overdispersed, we underestimate standard errors of the coefficients, and when we underestimate those, we get too optimistic p-values. This fits well with the coefficient summary above, where almost all coefficients are highly significant (https://stats.stackexchange.com/questions/459864/overdispersion-in-fitted-generalized-linear-model-with-insignificant-regression)
 
-But what if our guess that is is a poisson is just wrong? We can also look at the negative binomial distribution. 
+This means that we will not regard the simple poisson regression as valid, and therefore not include it in the coming comparissons between models.
+
+Instead we will now try with the negative binomial distribution.
 ## Negative binomial distribution
-The negative binomial distribution is similar to the quasi poisson, as it also has a dispersion parameter , 
-BUT DIFFERENT BECAUSE: 
+The negative binomial distribution is similar to the poisson, but it has a dispersement parameter, that 
+
 ------ THEORY -----
 
 ```{r}
@@ -140,7 +183,9 @@ nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
 summary(nbin_reg)
 ```
 
+----- Fortolkes -----
 
+As this model does not break any assumptions, we will use this as our baseline for future models.
 
 (gode diagnostics til count data)
  - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
@@ -150,37 +195,10 @@ summary(nbin_reg)
 - https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
 - https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
 
-## Comparing models.
 
 
-We can only use the residual deviance to compare to other models:
-
------ THEORY ABOUT DEVIANCE ------
-
-
-But looking at the residual deviance:
-```{r}
-# make a nice table here
-linear_model$deviance
-pois_reg$deviance
-q_pois_reg$deviance
-nbin_reg$deviance
-
-```
-We can clearly see that the negative binomial distribution is the best fit for our data so far. 
-
-
-We can also plot the estimates and standard deviations for each parameter in the models
-```{r}
-jtools::plot_summs(linear_model, pois_reg, q_pois_reg,nbin_reg)
-```
-
------- FORTOLKES --------
-Hvorfor er poisson og quasi poison så ens????
-
-
+But what if our problem is not overdispersement, but actually zero inflation?
 ## Zero Inflated models
-But what if our problem is not overdispersion, but actually zero inflation?
 
 Looking at the zero-inflated Poisson distribution, we can see that this model is comprised of two different processes. The first of which generates zeros:
 $$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
@@ -200,64 +218,47 @@ https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simula
 When using a zero-inflated model we can either write the model as:
 
 ```{r}
-zeroinfl(icu_days ~ .| . , data=data, dist="poisson")
+pscl::zeroinfl(icu_days ~ .| . , data=data, dist="poisson")
 ```
 
 If we believe the zero-variables are also dependent on the other variables.
 
+Or we can do:
+```{r}
+pscl::zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
+```
+if:
+
+
 Or we can write the model like this:
 
 ```{r}
-summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| emop , data=data, dist="poisson"))
+summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| emop, data=data, dist="poisson"))
 ```
-If we think that only a specifik set of variables influences the zero inflation. In this case we believe that emergency operations influence whether people are designated to spent 0 days in the ICU.
+If we think that only a specific set of variables influences the zero inflation. In this case we believe that emergency operations influence whether people are designated to spent 0 days in the ICU.
 We will use the latter, as there will be patients undergoing operations, that are "non-intrusive", meaning that they will almost never spent any days in the ICU.
 SKAL LIGE SKRIVE BEDRE
 
 
 
-(Bliv sikker på at man sætter modellen op som ovenover)
-
-
 ------- FORTOLKNING ---------
 
 
-Now let us compare this model to the normal poisson regression, we do that with a Vuong closeness statistic. The statistic tests the null hypothesis that the two models are equally close to the true data generating process, against the alternative that one model is closer. Note that it cannot make any decision whether the "closer" model is the true model. 
-```{r}
-pscl::vuong(pois_reg, zi_pois_reg)
-```
-We can see that the Vuong z-statistic is significant, which means that model 2 (zeroinflated) is better than model 1 (regular)
-The vuong test is very CONTROVERSIAL
------- THEORY -------
-
-https://stats.oarc.ucla.edu/r/dae/zip/
 
 # Zero inflated negative binomial
 But actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations? This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned eralier.
 
 ```{r}
-zi_nbin_reg <- zeroinfl(icu_days ~ .| emop , data=data, dist="negbin")
+zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| emop , data=data, dist="negbin")
 summary(zi_nbin_reg)
 ```
 
 ------ FORTOLK -------
 
 
-Again we can look at the vuong test for zero inflated models:
-```{r}
-pscl::vuong(nbin_reg, zi_nbin_reg)
-```
-IGEN DEN ER MEGET KONTROVERSIEL, SKAL MÅSKE BARE FJERNES
------ FORTOLK ------
 
-
-# Comparing zero inflated models
-```{r}
-library(lmtest)
-lrtest(zi_pois_reg, zi_nbin_reg )
-```
 The test shows that the second model (zero inflated negative binomial) is the best, on all levels of significance¨
------ Foklar udskrift -----
+----- Forklar udskrift -----
 
 
 # Compound poisson regression
@@ -296,46 +297,17 @@ summary(c_pois_reg)
 (Indsæt analyse af coefficienter)
 
 # Comparing all models
-
-
-## Akaika information criteria
------- TEORI OM AIC -------
-
-```{r}
-library(bbmle)
-models <- list(linear_model, pois_reg, q_pois_reg, nbin_reg,zi_pois_reg,zi_nbin_reg,c_pois_reg)
-aic_models <- sapply(models, AIC)
-metrics <- list("AIC")
-dfun <- function(object) {
-with(object,sum((weights * residuals^2)[weights > 0])/df.residual)
-}
-quasi_aic <- qAIC(pois_reg,dispersion=dfun(pois_reg)) # Her burger vi den alm  poisson model, men giver den dispersion parametret
-model_names <- list('linear_model', 'pois_reg', 'q_pois_reg', 'nbin_reg','zi_pois_reg','zi_nbin_reg','c_pois_reg')
-data <- data.frame(matrix(ncol=length(model_names), nrow = 1))
-colnames(data) <- model_names
-rownames(data) <- metrics
-data[1,] <- aic_models
-data[1,"q_pois_reg"] <- quasi_aic # indsæt rigtig værdi
-
-#data[3,] <- deviance_models
-data
-```
-
-
-
-
 ## Graphical overview of density functions
 If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset as the function is not defined at 0.  (NEEDS CITATION). 
 Therefore to get an idea of what the density could look like in a zero-inflated model we can use the package "rethinking" (from the famous bayesian book "Statiscical Rethinking" by Richard Mc Elreath) to plot the distribution given the probability of observing 0 and the mean of the distribution.
 
 ```{r}
 
-
 mu  <- mean(icu)
 xi = c_pois_reg$p
 phi = c_pois_reg$phi
-hist(icu, breaks=83, freq = FALSE)
 x <- seq(0, 82)
+barplot(count)
 lines(x, tweedie::dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
 
 lines(dpois(x=x,lambda=mu),type="l", col="blue") # Normal poisson
@@ -349,21 +321,76 @@ lines(rethinking::dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") 
 
 lines(countreg::dzinbinom(x=x, mu=mu, theta = zi_nbin_reg$theta, pi= p), type="l", col="darkorchid1") # Zero Inflated negative binomial
 # er ikke sikker på mu parameteren i den sidste
+```
+
+
+## Comparing models through metrics:
+We are looking at the following metrics:
+- AIC (Akaika information criteria)
+- BIC
+- Deviance ( why it doesnt work for zero inflated models)
+
+
+
+Why we don't use rmse:
+
+
+
+
+```{r echo=FALSE}
+# Calculating BIC for compound poisson glm
+# Found this in a very obscure gitlab repo for bayesian networks and modified it for our use
+# https://gitlab.univ-nantes.fr/petit-j-2/bnscore
+
+c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
+logLik_tweedie <-
+  function(cpglm_obj) {
+    # compute the density with the optimal parameters and the model coefficients
+    dens <- tweedie::dtweedie(y = cpglm_obj$y, 
+                              mu = cpglm_obj$fitted.values, 
+                              xi = cpglm_obj$p, 
+                              phi = cpglm_obj$phi)
+    
+    # tprof$glm.obj$rank is the number of estimated parameters in the model
+    # we add 2 to this value since the dispersion was estimated for computing
+    # the log-likelihood and the parameter p was optimized
+    k = length(cpglm_obj$coefficients) + 2
+    return( c(sum(log(dens)), k))
+  }
+
+logliks <- logLik_tweedie(c_pois_reg)[1]
+# WHY IS THIS NEGATIVE
+N <- nrow(data)
+k = logLik_tweedie(c_pois_reg)[2] #number of parameters in model
+BIC_c_pois_reg <- -2*logliks+log(N)*k
 
 ```
+
+```{r}
+models <- list(nbin_reg, zi_pois_reg,zi_nbin_reg,c_pois_reg)
+aic_models <- sapply(models, AIC)
+bic_models <- sapply(models[-c(4)], stats::BIC)
+rmse_models <- sapply(models, rmse)
+bic_models[4] <- BIC_c_pois_reg  # Code for this function is hidden in the HTML vignette, but available in the rmd
+ 
+deviance_models <- c(nbin_reg$deviance, NA, NA, c_pois_reg$deviance)
+metrics <- list("AIC","BIC","Deviance")
+model_names <- list('nbin_reg','zi_pois_reg','zi_nbin_reg','c_pois_reg')
+model_metrics <- data.frame(matrix(ncol=length(model_names), nrow = length(metrics)))
+colnames(model_metrics) <- model_names
+rownames(model_metrics) <- metrics
+model_metrics[1,] <- aic_models
+model_metrics[2,] <- bic_models
+model_metrics[3,] <- deviance_models
+model_metrics
+```
+Kræver en god forklaring
+
 
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
 
-Vi kan også sammenligne "Deviance" men ikke for de zero inflated models, da deviance er en GLM ting
-
-```{r}
-c_pois_reg$deviance
-linear_model$deviance
-pois_reg$deviance
-nbin_reg$deviance
-```
-Vi kunne også køre test/validation set opdeling? 
-
+## Conclusion
+TROR konklusionen blir almindelige nbin
 ## Discussion of confounders
 
 
@@ -373,3 +400,32 @@ Vi kunne også køre test/validation set opdeling?
 - vigtigt at vi konkluderer på om det rent faktisk blir bedre
 - analyser ALLE coefficenter med exp(coef(model)) https://rpubs.com/kaz_yos/pscl-2
 - Vi skal finde en måde at sammenligne de mere komplicerede modeller
+
+
+
+
+
+
+```{r}
+# Jeg tror ikke vi skal bruge prediction til noget, men jeg beholder lige koden til det
+##################
+library(caTools)
+set.seed(8484950) 
+sample = sample.split(data, SplitRatio = .90)
+train = subset(data, sample == TRUE)
+test  = subset(data, sample == FALSE)
+train_linear_model <-glm(icu_days ~ . , data=train, family="gaussian")
+train_nbin_reg <- MASS::glm.nb(icu_days ~ . , data=train)
+train_zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| emop, data=train, dist="poisson")
+train_zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| emop , data=train, dist="negbin")
+train_c_pois_reg <- cplm::cpglm(icu_days ~ . , data = train, link = "log")
+
+train_models <- list(train_linear_model, train_nbin_reg,  train_zi_pois_reg, train_zi_nbin_reg, train_c_pois_reg )
+
+calculate_prediction <- function(model){
+  p <- predict(model, test)
+  return(sqrt(mean((test$icu_days-p)^2)))
+}
+prediction_rmse <- data.frame(lapply(train_models, calculate_prediction))
+####################
+```
