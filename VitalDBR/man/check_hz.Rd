@@ -4,10 +4,10 @@
 \alias{check_hz}
 \title{Checks whether we are importing something that is measured in hz. If it is, it changes the row names to reflect the frequency}
 \usage{
-check_hz(df)
+check_hz(data)
 }
 \arguments{
-\item{df}{The dataframe we want to check. If}
+\item{data}{The dataframe we want to check. If}
 }
 \description{
 Checks whether we are importing something that is measured in hz. If it is, it changes the row names to reflect the frequency

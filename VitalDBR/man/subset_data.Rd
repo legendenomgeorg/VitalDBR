@@ -4,7 +4,7 @@
 \alias{subset_data}
 \title{Function for subsetting AWP data}
 \usage{
-subset_data(df, seconds, start_sec)
+subset_data(data, seconds, start_sec, filter = FALSE, cut_freq = 25)
 }
 \description{
 Function for subsetting AWP data

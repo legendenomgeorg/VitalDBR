@@ -4,10 +4,10 @@
 \alias{get_inspiration_start}
 \title{Function for finding inspiration starts}
 \usage{
-get_inspiration_start(df)
+get_inspiration_start(data, data_column = 2)
 }
 \arguments{
-\item{df}{Dataframe with AWP}
+\item{data}{Dataframe with AWP}
 }
 \description{
 Function for finding inspiration starts
