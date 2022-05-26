@@ -16,7 +16,7 @@ library(profvis)
 library(data.table)
 library(RcppRoll)
 library(RcppArmadillo)
-library(sandwich)
+#library(sandwich)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -328,47 +328,18 @@ process_cases <- function(data){
   data <- cbind(data, ppv_first30)
   data <- cbind(data, ppv_last30)
   return(data)
-}
-#startTime <- Sys.time()
-# ppv_data <- process_cases(merged)
-#endTime <- Sys.time()
-#print(endTime - startTime)
-#View(ppv_data)
+} 
+
+startTime <- Sys.time()
+ppv_data <- process_cases(merged)
+endTime <- Sys.time()
+print(endTime - startTime)
+View(ppv_data)
 #})
-#path <- getwd()
-#filename = paste(path, 'df.csv',sep = '')
-#write.csv(ppv_data, filename)
+path <- getwd()
+filename = paste(path, 'df30.csv',sep = '')
+write.csv(ppv_data, filename)
 
-```
-
-```{r}
-# data.frame: Time difference of 41.54168 secs 
-# as.tibble: Time difference of 41.2858 secs
-#View(ppv_data)
-```
-
-
-```{r}
-full <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
-merged2 <- merge(x=merged,y=full,by="caseid") 
-#merged
-```
-
-```{r}
-# Fjern de her operationer
-full %>% select("preop_ecg") %>% dplyr::filter(preop_ecg != "Normal Sinus Rhythm")
-
-```
-```{r}
-full
-```
-
-```{r}
-ppv_data <- process_cases(merged[1:6,])
-
-ppv_data
-
-#ppv_data <- process_cases(merged[3:4,]) 10 rows
 ```
 
 
