@@ -105,13 +105,25 @@ subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
 #' Function for plotting AWP data
 #' @export
 #' @param awp_data Dataframe with AWP data
-plot_awp <- function(awp_data) {
-  ggplot(sub_awp, aes(Time, Primus.AWP)) +
-    geom_line() + xlab('Time (sec)') + ylab('Airway Pressure Wave (hPa)') + theme_classic()}
+#' @param add_insp_start
+#' @param insp_start_data
+plot_awp <- function(awp_data, add_insp_start = 'no', insp_start_data = NULL) {
+  if (add_insp_start != 'no') {
+    ggplot(sub_awp, aes(Time, Primus.AWP)) + geom_line() +theme_classic() + labs(title = 'Airway Pressure Wave \n with Inspiration Start', x = 'Time (sec)', y = 'AWP (hPa)') + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino')) + geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
+                                                                                                                                                                                                                                                                                                             data = insp_start_data)
+  }
+
+  else {
+    ggplot(sub_awp, aes(Time, Primus.AWP)) + geom_line() +theme_classic() + labs(title = 'Airway Pressure Wave', x = 'Time (sec)', y = 'AWP (hPa)') + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+  }
+}
+
 
 #' Function for plotting ART data
 #' @export
 #' @param art_data Dataframe with ART data
+#' @param insp_start_data
+#' @param beats_data
 plot_art <- function(art_data, insp_start_data, beats_data) {
 ggplot(sub_art, aes(Time, SNUADC.ART)) +
   geom_line() +

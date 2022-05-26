@@ -4,7 +4,7 @@
 \alias{plot_awp}
 \title{Function for plotting AWP data}
 \usage{
-plot_awp(awp_data)
+plot_awp(awp_data, add_insp_start = "no", insp_start_data = NULL)
 }
 \arguments{
 \item{awp_data}{Dataframe with AWP data}
