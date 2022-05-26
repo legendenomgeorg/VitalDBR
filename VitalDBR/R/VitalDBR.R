@@ -116,7 +116,7 @@ plot_art <- function(art_data, insp_start_data, beats_data) {
 ggplot(sub_art, aes(Time, SNUADC.ART)) +
   geom_line() +
   geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-             data = insp_start_data) + 
+             data = insp_start_data) +
   geom_point(aes(x = time,
                  y = dia,
                  colour = "Diastole"),
@@ -126,10 +126,10 @@ ggplot(sub_art, aes(Time, SNUADC.ART)) +
                  colour = "Systole"), size = 5,
              data = beats_data) +
   theme_classic() +
-  labs(title = 'Arterial Pressure Waveform', x = 'Time (sec)', y = 'ART (mmHg)') + 
+  labs(title = 'Arterial Pressure Waveform', x = 'Time (sec)', y = 'ART (mmHg)') +
   theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino')) +
-  labs(color='Type') 
-} 
+  labs(color='Type')
+}
 
 #' Function for plotting Pulse Pressure
 #' @export
@@ -140,7 +140,7 @@ pp_plot <- function(insp_start_data, beats_data) {
     geom_line() +
     geom_point() +
     geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-               data = insp_start_data) + theme_classic() + labs(title = 'Pulse Pressure', x = 'Time (sec)', y = 'PP (mmHg)') + 
+               data = insp_start_data) + theme_classic() + labs(title = 'Pulse Pressure', x = 'Time (sec)', y = 'PP (mmHg)') +
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 }
 
@@ -154,9 +154,9 @@ pp_plot_color <- function(beats_indexed_data, insp_start_data) {
     # insp_n is a unique (consecutive) number for each respiratory cycle
     geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) +
     geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-               data = insp_start_data) + theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') + 
+               data = insp_start_data) + theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') +
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
-  
+
 }
 
 #' Function for plotting Pulse Pressure by position in respiratory cycle
@@ -167,7 +167,7 @@ pp_plot_insp <- function(beats_indexed_data) {
          aes(ann_rel_index, PP, group = as.factor(ann_n), color = as.factor(ann_n))) +
     geom_line(alpha = 0.4, show.legend = FALSE) +
     # insp_n is a unique (consecutive) number for each respiratory cycle
-    geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) + theme_classic() + labs(title = 'By position in the respiratory cycle', x = 'Index to Inspiration Start (Relative)', y = 'PP (mmHg)') + 
+    geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) + theme_classic() + labs(title = 'By position in the respiratory cycle', x = 'Index to Inspiration Start (Relative)', y = 'PP (mmHg)') +
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))}
 
 #' Function for plotting pp_plot_insp and pp_plot_color
@@ -175,22 +175,5 @@ pp_plot_insp <- function(beats_indexed_data) {
 #' @param beats_indexed_data
 #' @param insp_start_data
 pp_plot_color_and_index <- function(beats_indexed_data, insp_start_data) {
-  pp_plot_color(beats_indexed, insp_start) + pp_plot_insp(beats_indexed) +  plot_annotation(title = 'Pulse Pressure', subtitle = '- where color indactes repsiratory cycle -') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))  
+  pp_plot_color(beats_indexed, insp_start) + pp_plot_insp(beats_indexed) +  plot_annotation(title = 'Pulse Pressure', subtitle = '- where color indactes repsiratory cycle -') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 }
-
-#library(devtools)
-#install_github('legendenomgeorg/VitalDBR/VitalDBR',force=TRUE)
-#library(VitalDBR)
-#data <- VitalDBR::load_case('SNUADC/ART', 1)
-#hz <- 1/(data[2,1]-data[1,1])
-
-#startTime <- Sys.time()
-#test1 <- subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
-#endTime <- Sys.time()
-#print(endTime - startTime)
-
-
-#startTime <- Sys.time()
-#test2 <-VitalDBR::subset_data(data = data, seconds = 60, start_sec = 6000, filter=TRUE)
-#endTime <- Sys.time()
-#print(endTime - startTime)
