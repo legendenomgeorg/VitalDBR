@@ -45,8 +45,7 @@ data <- merged %>% select(-'X', -'aneend', -'anestart', -'opend', -'opstart') %>
 data <- mutate_if(data, is.character, as.factor) %>% select(-'caseid', -'death_inhosp', -'preop_ecg')
 data$sex <- ifelse(data$sex=='M', 1,0)
 data$preop_pft <- ifelse(data$preop_pft=='Normal',1, 0)
-data$knife_time <- round(data$knife_time, 4)
-data$ppv_under5 <- round(data$ppv_under5, 4)
+data$knife_time <- round(data$knife_time, 2)
 data$ppv_over8 <- round(data$ppv_over8, 4)
 data$ppv_avg_first30 <- round(data$ppv_avg_first30, 4)
 data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
@@ -218,27 +217,34 @@ https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simula
 When using a zero-inflated model we can either write the model as:
 
 ```{r}
-pscl::zeroinfl(icu_days ~ .| . , data=data, dist="poisson")
+pscl::zeroinfl(icu_days ~ . , data=data, dist="poisson")
 ```
 
-If we believe the zero-variables are also dependent on the other variables.
+If we believe that the variables both influence the zero inflation AND the poisson distribution
 
 Or we can do:
 ```{r}
 pscl::zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
 ```
-if:
+if we believe that the variables have no effect on the zero inflation. ie. there are a part of the zero observations that are just inherently there or decided by a variable we do not have access to.
 
 
-Or we can write the model like this:
+But we will use this model:
 
 ```{r}
-summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| emop, data=data, dist="poisson"))
+summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv_avg_last_30, data=data, dist="poisson"))
 ```
-If we think that only a specific set of variables influences the zero inflation. In this case we believe that emergency operations influence whether people are designated to spent 0 days in the ICU.
-We will use the latter, as there will be patients undergoing operations, that are "non-intrusive", meaning that they will almost never spent any days in the ICU.
-SKAL LIGE SKRIVE BEDRE
+As we think that only a specific set of variables influences the zero inflation.
+In this case we first of all believe that emergency operations influence whether people are designated to spent 0 days in the ICU. The reason is that an operation being an emergency, will probably have an influence on whether the patient spent 0 days in the ICU. With a simple tally, we can see that people undergoing non emergency operations generally spend 0 days in the ICU
+```{r}
+# Number of non Emergency operations with 0 days spoent in the ICU
+data %>% filter(emop==0, icu_days==0) %>% nrow()
+# Number of Emergency operations with 0 days spoent in the ICU
+data %>% filter(emop==1, icu_days==0) %>% nrow()
+```
 
+
+We also add all variables, that are not a result of the operation. This is because they do not indicate anything about the operation, but instead about the general condition of the patient. These are every variable but: ppv_under_5, ppv_under_8 and ppv_avg_last_30 .
 
 
 ------- FORTOLKNING ---------
@@ -247,9 +253,8 @@ SKAL LIGE SKRIVE BEDRE
 
 # Zero inflated negative binomial
 But actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations? This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned eralier.
-
 ```{r}
-zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| emop , data=data, dist="negbin")
+zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .|. -ppv_under5 -ppv_over8 -ppv_avg_last_30, data=data, dist="negbin")
 summary(zi_nbin_reg)
 ```
 
@@ -307,7 +312,7 @@ mu  <- mean(icu)
 xi = c_pois_reg$p
 phi = c_pois_reg$phi
 x <- seq(0, 82)
-barplot(count)
+barplot(count, xlim=c(0,15))
 lines(x, tweedie::dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
 
 lines(dpois(x=x,lambda=mu),type="l", col="blue") # Normal poisson
@@ -322,17 +327,17 @@ lines(rethinking::dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") 
 lines(countreg::dzinbinom(x=x, mu=mu, theta = zi_nbin_reg$theta, pi= p), type="l", col="darkorchid1") # Zero Inflated negative binomial
 # er ikke sikker på mu parameteren i den sidste
 ```
-
+Her skal vi nok lige undersøge hvorfor de ikke starter det samme sted hehe
 
 ## Comparing models through metrics:
 We are looking at the following metrics:
 - AIC (Akaika information criteria)
-- BIC
-- Deviance ( why it doesnt work for zero inflated models)
+- BIC 
+- Deviance (Why it doesnt work for zero inflated models)
+- Why we don't use rmse
 
 
 
-Why we don't use rmse:
 
 
 
@@ -390,16 +395,16 @@ Kræver en god forklaring
 https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
 
 ## Conclusion
-TROR konklusionen blir almindelige nbin
+TROR konklusionen blir almindelig nbin
+
 ## Discussion of confounders
 
 
 ## TO DO:
 - Forklare coefficienter
 - forklaring af residual deviance vs null deviance (se stack link)
-- vigtigt at vi konkluderer på om det rent faktisk blir bedre
 - analyser ALLE coefficenter med exp(coef(model)) https://rpubs.com/kaz_yos/pscl-2
-- Vi skal finde en måde at sammenligne de mere komplicerede modeller
+
 
 
 
