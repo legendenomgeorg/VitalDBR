@@ -30,6 +30,7 @@ library(VitalDBR)
 # devtools::install_github("rmcelreath/rethinking")
 # install_cmdstan() 
 #------------------------
+
 library(rethinking)
 ```
 
@@ -132,9 +133,12 @@ $$ E[Y|X] = e^{\beta X} $$
 And when we reintroduce the poisson error term, we get our final model:
 $$ Y \sim Poisson( e^{\beta X} )  $$
 
+This is the model we will try now.
 
 
+## Skal lige skrives naturligt ind
 A standard linear regression is just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function.
+GLM's don't assume homoskedacity, as the variance 
 
 
 ## Poisson GLM
@@ -173,9 +177,23 @@ This means that we will not regard the simple poisson regression as valid, and t
 
 Instead we will now try with the negative binomial distribution.
 ## Negative binomial distribution
-The negative binomial distribution is similar to the poisson, but it has a dispersement parameter, that 
+The negative binomial distribution is similar to the poisson, but it has a dispersement parameter, that influences the variance. 
+If Y us distributed as 
+$$Y \sim NB(r,p) ={k+r-1 \choose k} \cdot (1-p)^r p^k $$
+where r is the number of failures until the experiment is stopped and p is the probability of success, the expected value and variance can be defined as follows:
 
------- THEORY -----
+$$ E[Y] = \frac{pr}{1-p}$$
+$$ Var[Y] = \frac{pr}{(1-p)^2}$$
+But the negative binomial distribution can be reformulated as: 
+$$\operatorname{Pr}(X=k)=\frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+m}\right)^{r}\left(\frac{m}{r+m}\right)^{k} \quad \ \ k=0,1,2, \ldots$$
+(der er en ok forklaring på det her på wikipedia, skal jeg gå mere i dybden?)
+https://en.wikipedia.org/wiki/Negative_binomial_distribution
+And the expected value and variance can then be derived as:
+$$E[Y] = m $$
+$$Var[Y] = m+\frac{m^2}{r} $$
+Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. 
+Now, when fitting the negative binomial we can express it in terms of it's mean through a log link and $r$ , which means that the formula then becomes:
+$$Y \sim NB(e^{\beta X}, r)  $$
 
 ```{r}
 nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
@@ -196,9 +214,8 @@ As this model does not break any assumptions, we will use this as our baseline f
 
 
 
-But what if our problem is not overdispersement, but actually zero inflation?
+But what if our problem is not overdispersement, but actually zero inflation? Meaning that the difference between mean and variance in our data is actually caused by the high amount of 0's, and that if we account for those, the poisson model might not be overdispersed at all.
 ## Zero Inflated models
-
 Looking at the zero-inflated Poisson distribution, we can see that this model is comprised of two different processes. The first of which generates zeros:
 $$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
 Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logistic regression, as it predicts a "probability" between 0 and 1 of observing 0. 
@@ -213,8 +230,8 @@ https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-buildi
 https://en.wikipedia.org/wiki/Zero-inflated_model
 https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
 
-
-When using a zero-inflated model we can either write the model as:
+These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "zeroinfl" package. 
+There are various formulations we can use, depending on how we believe the variables influence each part of the model:
 
 ```{r}
 pscl::zeroinfl(icu_days ~ . , data=data, dist="poisson")
@@ -228,7 +245,6 @@ pscl::zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
 ```
 if we believe that the variables have no effect on the zero inflation. ie. there are a part of the zero observations that are just inherently there or decided by a variable we do not have access to.
 
-
 But we will use this model:
 
 ```{r}
@@ -236,6 +252,7 @@ summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv
 ```
 As we think that only a specific set of variables influences the zero inflation.
 In this case we first of all believe that emergency operations influence whether people are designated to spent 0 days in the ICU. The reason is that an operation being an emergency, will probably have an influence on whether the patient spent 0 days in the ICU. With a simple tally, we can see that people undergoing non emergency operations generally spend 0 days in the ICU
+
 ```{r}
 # Number of non Emergency operations with 0 days spoent in the ICU
 data %>% filter(emop==0, icu_days==0) %>% nrow()
@@ -245,10 +262,9 @@ data %>% filter(emop==1, icu_days==0) %>% nrow()
 
 
 We also add all variables, that are not a result of the operation. This is because they do not indicate anything about the operation, but instead about the general condition of the patient. These are every variable but: ppv_under_5, ppv_under_8 and ppv_avg_last_30 .
-
+(her burde vi adde knifte_time, men så er der for mange variable i modellen ift data :i ) 
 
 ------- FORTOLKNING ---------
-
 
 
 # Zero inflated negative binomial
@@ -260,10 +276,6 @@ summary(zi_nbin_reg)
 
 ------ FORTOLK -------
 
-
-
-The test shows that the second model (zero inflated negative binomial) is the best, on all levels of significance¨
------ Forklar udskrift -----
 
 
 # Compound poisson regression
@@ -331,18 +343,25 @@ Her skal vi nok lige undersøge hvorfor de ikke starter det samme sted hehe
 
 ## Comparing models through metrics:
 We are looking at the following metrics:
-- AIC (Akaika information criteria)
-- BIC 
-- Deviance (Why it doesnt work for zero inflated models)
-- Why we don't use rmse
+### AIC (Akaika information criteria)
+
+### BIC 
+
+
+
+### Deviance (Why it doesnt work for zero inflated models)
+
+
+
+### Why we don't use RMSE
 
 
 
 
 
 
-
-```{r echo=FALSE}
+Caculating BIC for the Compound poisson regression has to be done manually for some reason
+```{r}
 # Calculating BIC for compound poisson glm
 # Found this in a very obscure gitlab repo for bayesian networks and modified it for our use
 # https://gitlab.univ-nantes.fr/petit-j-2/bnscore
@@ -355,28 +374,26 @@ logLik_tweedie <-
                               mu = cpglm_obj$fitted.values, 
                               xi = cpglm_obj$p, 
                               phi = cpglm_obj$phi)
-    
-    # tprof$glm.obj$rank is the number of estimated parameters in the model
-    # we add 2 to this value since the dispersion was estimated for computing
+    # we add 2 to the number of parameters, since the dispersion was estimated for computing
     # the log-likelihood and the parameter p was optimized
     k = length(cpglm_obj$coefficients) + 2
     return( c(sum(log(dens)), k))
   }
 
 logliks <- logLik_tweedie(c_pois_reg)[1]
-# WHY IS THIS NEGATIVE
 N <- nrow(data)
 k = logLik_tweedie(c_pois_reg)[2] #number of parameters in model
 BIC_c_pois_reg <- -2*logliks+log(N)*k
 
 ```
 
+Creating a table of the metrics:
 ```{r}
 models <- list(nbin_reg, zi_pois_reg,zi_nbin_reg,c_pois_reg)
 aic_models <- sapply(models, AIC)
 bic_models <- sapply(models[-c(4)], stats::BIC)
 rmse_models <- sapply(models, rmse)
-bic_models[4] <- BIC_c_pois_reg  # Code for this function is hidden in the HTML vignette, but available in the rmd
+bic_models[4] <- BIC_c_pois_reg  
  
 deviance_models <- c(nbin_reg$deviance, NA, NA, c_pois_reg$deviance)
 metrics <- list("AIC","BIC","Deviance")
