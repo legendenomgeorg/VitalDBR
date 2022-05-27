@@ -29,8 +29,6 @@ library(MuMIn)
 As stated in the introduction, we want to look into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit)
 
 
-
-
 ## Analysis
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
@@ -136,9 +134,9 @@ Another reason we use GLM's is that they don't assume homoskedacity, as
 
 
 
+## GLM
 
-
-## Poisson GLM
+### Poisson GLM
 Even though we probably have too many zeros as we saw earlier, we will still try to use a simple poisson model for our regression:
 ```{r}
 summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log")))
@@ -155,7 +153,7 @@ This violates the properties of the poisson distribution, where $$E(X) = VAR(X) 
 When the variance is larger than the mean, we are working with as so-called "over-dispersed" model, which further incentivises us to look into more advanced modelling. 
 
 
-# Overdispersement
+### Overdispersement
 We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1.
 
 ```{r}
@@ -170,8 +168,9 @@ This means that we will not regard the simple poisson regression as valid, and t
 
 
 Instead we will now try with the negative binomial distribution.
-## Negative binomial distribution
-The negative binomial distribution is similar to the poisson, but it has a dispersement parameter, that influences the variance. 
+
+### Negative binomial GLM
+
 If Y us distributed as 
 $$Y \sim NB(r,p) $$
 where r is the number of failures until the experiment is stopped and p is the probability of success, the expected value and variance can be defined as follows:
@@ -182,7 +181,7 @@ $$Y \sim NB(\mu, \alpha)  = \frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+\m
 This in itself is not that useful, but it means that now we can define the mean and variance of the negative binomial distribution as:
 $$E[Y] = m $$
 $$Var[Y] = m+\frac{m^2}{r} $$
-Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. Note that as this dispersion paramter gets larger and larger, the variance converges to the same value as the mean, and then the negative binomial distribution magically turns into the poisson distribution.
+Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. Note that as this dispersion paramter gets larger and larger, the variance converges to the same value as the mean, and then the negative binomial distribution magically turns into the poisson distribution. This means that we now have a distribution that is similar to the poisson, but we can vary the variance, this is perfect since we can account for overdispersion by changing $r$
 
 Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula for the regression mean becomes:
 $$Y \sim NB(e^{\beta X}, r)  $$
@@ -196,18 +195,11 @@ summary(nbin_reg)
 
 As this model does not break any assumptions, we will use this as our baseline for future models.
 
-(gode diagnostics til count data)
- - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
-
-- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
-- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
-- https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
-- https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
-
-
 
 But what if our problem is not overdispersement, but actually zero inflation? Meaning that the difference between mean and variance in our data is actually caused by the high amount of 0's, and that if we account for those, the poisson model might not be overdispersed at all.
-## Zero Inflated models
+##Zero Inflated models
+### Zero Inflated Poisson
+
 Looking at the zero-inflated Poisson distribution, we can see that this model is comprised of two different processes. The first of which generates zeros:
 $$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
 Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logistic regression, as it predicts a "probability" between 0 and 1 of observing 0. 
@@ -216,11 +208,6 @@ The second is a poisson distribution
 $$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
 Where $ \pi$ is the probability of of extra zeros
 
-
-https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
-
-https://en.wikipedia.org/wiki/Zero-inflated_model
-https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
 
 These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "zeroinfl" package. 
 There are various formulations we can use, depending on how we believe the variables influence each part of the model. For example we can write the formula as:
@@ -258,7 +245,7 @@ We also add all variables, that are not a result of the operation. This is becau
 
 
 
-# Zero inflated negative binomial
+### Zero inflated negative binomial
 But actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations? This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned eralier.
 ```{r}
 zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .|. -ppv_under5 -ppv_over8 -ppv_avg_last_30, data=data, dist="negbin")
@@ -267,7 +254,7 @@ summary(zi_nbin_reg)
 
 ------ FORTOLK -------
 
-# Compound poisson regression
+## Compound poisson regression
 Now we will explore "compound poisson regression" as an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
 
 Our compound distribution, often referred to as the "Compound Poisson-Gamma distribution" is defined as: 
@@ -296,8 +283,7 @@ $$ Var[Y] = \phi \cdot \mu^\rho $$
 As seen previously, we can link the mean to the linear predictors through the log function. And we can finally write it in the same fashion as the two previous GLMs
 $$ Y \sim CPois(e^{X\beta}, \phi, \rho)$$
 
-https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
-https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
+
 
 We can finally do this compound poisson regression using the library "cplm" 
 ```{r}
@@ -307,23 +293,26 @@ summary(c_pois_reg)
 
 (Indsæt analyse af coefficienter)
 
-# Comparing all models
-## Comparing models through metrics:
+## Comparing all models
+
+### Comparing models through metrics:
 We will compare our models with the metrics AICc and BIC. We look for the model with the lowest of these values.
-### AIC
+
+#### AIC
 AIC is defined as:
 $$AIC =  2k - 2log(LL) $$
 Where k is the amount of parameters in our model and LL is the log-likelihood estimate.
 We can break AIC into two parts. First, when the $2k$ part penalizes when we add more parameters to our model ie. it penalizes complexity and $-2log(LL)$ decreases as our model gets better at explaining our data, this rewards us for building models that fit our data well.
 
 In this analysis we are using AICc which is a different formulation that corrects for small samples. As the number of sample goes to infinity, AICc converges to AIC, so there is no reason not to use AIC, especially since we do not have extremely many samples.
-### BIC 
+
+#### BIC 
 BIC is the Bayesian information criteria, and its formula is pretty similar to AIC's:
 $$BIC = klog(n)-2log(LL) $$
 The concept is the same, but our model is not only penalized by the amount of parameters in the model, $k$, but also by the amount of data in our model $n$. 
 
 
-## Calculating metrics
+### Calculating metrics
 Calculating AICc and BIC for the Compound poisson regression has to be done manually:
 ```{r}
 # Calculating BIC for compound poisson glm
@@ -389,3 +378,27 @@ In conclusion we see no correlation between PPV and days in the ICU.
 
 
 
+
+# Alle links jeg har brugt mere eller mindre
+
+
+
+(gode diagnostics til count data)
+ - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
+
+- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
+- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
+- https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
+- https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
+
+
+
+
+https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
+
+https://en.wikipedia.org/wiki/Zero-inflated_model
+https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
+
+
+https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
+https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
