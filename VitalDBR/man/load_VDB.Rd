@@ -9,6 +9,9 @@ load_VDB(file_url)
 \arguments{
 \item{file_url}{URL for API endpoint}
 }
+\value{
+A dataframe with values from the specified endpoint
+}
 \description{
 Loads file from URL (helper function)
 }

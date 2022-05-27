@@ -6,6 +6,11 @@
 \usage{
 pp_plot(insp_start_data, beats_data)
 }
+\arguments{
+\item{insp_start_data}{Inspiration start data}
+
+\item{beats_data}{Beats data}
+}
 \description{
 Function for plotting Pulse Pressure
 }

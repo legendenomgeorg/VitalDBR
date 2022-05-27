@@ -8,6 +8,10 @@ plot_art(art_data, insp_start_data, beats_data)
 }
 \arguments{
 \item{art_data}{Dataframe with ART data}
+
+\item{insp_start_data}{Inspiration start data}
+
+\item{beats_data}{Beats data}
 }
 \description{
 Function for plotting ART data

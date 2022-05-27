@@ -4,10 +4,14 @@
 \alias{get_inspiration_start}
 \title{Function for finding inspiration starts}
 \usage{
-get_inspiration_start(data, data_column = 2)
+get_inspiration_start(data, data_column = 2, n = 8)
 }
 \arguments{
-\item{data}{Dataframe with AWP}
+\item{data}{Dataframe with AWP data (Time, Primus.AWP)}
+
+\item{data_column}{Specify location of the AWP data column}
+
+\item{n}{Specify number of -1's and 1's on each side of 0 in the convolution filter (8 by default). For n = 2, the convoultion filter is: -1, -1, 0, 1, 1}
 }
 \description{
 Function for finding inspiration starts

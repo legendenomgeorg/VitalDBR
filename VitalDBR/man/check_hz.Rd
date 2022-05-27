@@ -7,7 +7,7 @@
 check_hz(data)
 }
 \arguments{
-\item{data}{The dataframe we want to check. If}
+\item{data}{The dataframe we want to check.}
 }
 \description{
 Checks whether we are importing something that is measured in hz. If it is, it changes the row names to reflect the frequency

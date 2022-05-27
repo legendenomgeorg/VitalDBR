@@ -2,10 +2,15 @@
 % Please edit documentation in R/VitalDBR.R
 \name{subset_data}
 \alias{subset_data}
-\title{Function for subsetting AWP data}
+\title{Function for subsetting AWP and ART data}
 \usage{
 subset_data(data, seconds, start_sec, filter = FALSE, cut_freq = 25)
 }
+\arguments{
+\item{filter}{Specify if a Butterworth Filter should be applied to the data (FALSE by default)}
+
+\item{cut_freq}{Specify cutoff frequency for the filter (25 by default)}
+}
 \description{
-Function for subsetting AWP data
+Function for subsetting AWP and ART data
 }

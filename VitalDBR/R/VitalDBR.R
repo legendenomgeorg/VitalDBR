@@ -1,26 +1,23 @@
 #' Loads file from URL (helper function)
 #' @export
 #' @param file_url URL for API endpoint
+#' @return A dataframe with values from the specified endpoint
+#' @example
+#' load_VDB("https://api.vitaldb.net/trks")
+#' load_VDB("https://api.vitaldb.net/cases")
+#' load_VDB("https://api.vitaldb.net/labs")
+#' load_VDB(https://api.vitaldb.net/{tid})
+#'
 load_VDB <- function(file_url) {
   con <- gzcon(url(file_url))
   txt <- readLines(con)
   return(read.csv(textConnection(txt)))
 }
 
-
-#' Small helper function that converts index into hz
-#' @export
-#' @param x a string with an integer
-#' @param freq the frequency of your dataset
-fix_hz_index <- function(x,freq) {
-  return(as.numeric(x)*freq)
-}
-
 #' Checks whether we are importing something that is measured in hz. If it is, it changes the row names to reflect the frequency
 #' @export
-#' @param data The dataframe we want to check. If
+#' @param data The dataframe we want to check.
 check_hz <- function(data){
-  #if (is.na(data[1,2]) & is.na(data[2,2] & !is.na(data[1,1]) & !is.na(data[2,1]) )){
   if (is.na(data[3,1])){
     freq = data[2,1]
     data <- subset (data, select = -Time)
@@ -52,6 +49,10 @@ load_trk <- function(tid){
 #' @export
 #' @param tname Name of track
 #' @param caseid A case id, from which you want to load the track given as tname
+#' @example
+#' load_case('Primus/AWP', 1)
+#' load_case('SNUADC/ART', 1)
+#' @return A dataframe with values from the specified track name and track id
 load_case <- function(tname, caseid){
   tracks <- load_VDB("https://api.vitaldb.net/trks.csv.gz")
   tracks <- tracks[tracks$caseid == caseid,]
@@ -62,10 +63,12 @@ load_case <- function(tname, caseid){
 
 #' Function for finding inspiration starts
 #' @export
-#' @param data Dataframe with AWP
-get_inspiration_start <- function(data, data_column=2) {
+#' @param data Dataframe with AWP data (Time, Primus.AWP)
+#' @param data_column Specify location of the AWP data column
+#' @param n Specify number of -1's and 1's on each side of 0 in the convolution filter (8 by default). For n = 2, the convoultion filter is: -1, -1, 0, 1, 1
+#' @value Returns a dataframe with inspiration start times
+get_inspiration_start <- function(data, data_column=2, n=8) {
 
-  n = 8
   before <- rep(1, n)
   after <- rep(-1, n)
 
@@ -80,17 +83,19 @@ get_inspiration_start <- function(data, data_column=2) {
   convolution <- waveformtools::filter_signal(convolution, 25, 1500, signal_col = 2)
   insp_start <- waveformtools::find_peaks(convolution$values_filt,m=100, na.ignore=TRUE)
   insp_start <- convolution$time[insp_start]
-  #insp_start <- insp_start[2:(length(insp_start)-1)] # removing the first and last peak since it is not representative
   insp_start <- data.frame(insp_start)
   names(insp_start)[1] <- "time"
   return(insp_start)
 }
 
-#' Function for subsetting AWP data
+#' Function for subsetting AWP and ART data
 #' @export
 #' @param data
 #' @param start_sec
 #' @param seconds
+#' @param filter Specify if a Butterworth Filter should be applied to the data (FALSE by default)
+#' @param cut_freq Specify cutoff frequency for the filter (25 by default)
+#' @value Returns a dataframe with a subset of AWP or ART data, with columns  Time, ART or AWP, ART or AWP filtered (If specified).
 subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
   hz <- 1/(data[2,1]-data[1,1])
   start <- start_sec*hz
@@ -105,8 +110,9 @@ subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
 #' Function for plotting AWP data
 #' @export
 #' @param awp_data Dataframe with AWP data
-#' @param add_insp_start
-#' @param insp_start_data
+#' @param add_insp_start Specify if Inspiration Start Times should be plotted
+#' @param insp_start_data Inspiration start data
+#' @value Returns a ggplot
 plot_awp <- function(awp_data, add_insp_start = 'no', insp_start_data = NULL) {
   if (add_insp_start != 'no') {
     ggplot(sub_awp, aes(Time, Primus.AWP)) + geom_line() +theme_classic() + labs(title = 'Airway Pressure Wave \n with Inspiration Start', x = 'Time (sec)', y = 'AWP (hPa)') + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino')) + geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
@@ -122,8 +128,9 @@ plot_awp <- function(awp_data, add_insp_start = 'no', insp_start_data = NULL) {
 #' Function for plotting ART data
 #' @export
 #' @param art_data Dataframe with ART data
-#' @param insp_start_data
-#' @param beats_data
+#' @param insp_start_data Inspiration start data
+#' @param beats_data Beats data
+#' @value Returns a ggplot
 plot_art <- function(art_data, insp_start_data, beats_data) {
 ggplot(sub_art, aes(Time, SNUADC.ART)) +
   geom_line() +
@@ -145,8 +152,9 @@ ggplot(sub_art, aes(Time, SNUADC.ART)) +
 
 #' Function for plotting Pulse Pressure
 #' @export
-#' @param insp_start_data
-#' @param beats_data
+#' @param insp_start_data Inspiration start data
+#' @param beats_data Beats data
+#' @value Returns a ggplot
 pp_plot <- function(insp_start_data, beats_data) {
   ggplot(beats_data, aes(time, PP)) +
     geom_line() +
@@ -158,16 +166,26 @@ pp_plot <- function(insp_start_data, beats_data) {
 
 #' Function for plotting Pulse Pressure where different respiratory cycles are indicated
 #' @export
-#' @param beats_indexed_data
-#' @param insp_start_data
-pp_plot_color <- function(beats_indexed_data, insp_start_data) {
-  ggplot(beats_indexed, aes(time, PP)) +
+#' @param beats_indexed_data Beats with indexes data
+#' @param insp_start_data Inspiration start data
+pp_plott_color <- function(beats_indexed_data, insp_start_data) {
+  beats_indexed_data <- beats_indexed_data[!is.na(beats_indexed_data$ann_n), ]
+  min <- min(na.omit(beats_indexed$ann_n))
+  max <- max(na.omit(beats_indexed$ann_n))
+  myvec <- to_vec(for (x in c(min:max)) for (y in c('Cycle no.')) paste(y,x))
+
+
+  ggplot(beats_indexed_data, aes(time, PP)) +
     geom_line() +
     # insp_n is a unique (consecutive) number for each respiratory cycle
-    geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) +
+    geom_point(aes(color = as.factor(ann_n)), show.legend = TRUE, size = 3) +
     geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-               data = insp_start_data) + theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') +
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+               data = insp_start_data) +
+    theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') +
+    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino')) +
+    scale_color_discrete(name = 'Respiratory Cycle', breaks = c(min:max), labels = myvec)
+
+
 
 }
 
@@ -179,7 +197,9 @@ pp_plot_insp <- function(beats_indexed_data) {
          aes(ann_rel_index, PP, group = as.factor(ann_n), color = as.factor(ann_n))) +
     geom_line(alpha = 0.4, show.legend = FALSE) +
     # insp_n is a unique (consecutive) number for each respiratory cycle
-    geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) + theme_classic() + labs(title = 'By position in the respiratory cycle', x = 'Index to Inspiration Start (Relative)', y = 'PP (mmHg)') +
+    geom_point(aes(color = as.factor(ann_n)), show.legend = FALSE, size = 3) +
+    theme_classic() +
+    labs(title = 'By position in the respiratory cycle', x = 'Index to Inspiration Start (Relative)', y = 'PP (mmHg)') +
     theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino'))}
 
 #' Function for plotting pp_plot_insp and pp_plot_color

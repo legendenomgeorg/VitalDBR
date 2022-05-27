@@ -8,6 +8,10 @@ plot_awp(awp_data, add_insp_start = "no", insp_start_data = NULL)
 }
 \arguments{
 \item{awp_data}{Dataframe with AWP data}
+
+\item{add_insp_start}{Specify if Inspiration Start Times should be plotted}
+
+\item{insp_start_data}{Inspiration start data}
 }
 \description{
 Function for plotting AWP data

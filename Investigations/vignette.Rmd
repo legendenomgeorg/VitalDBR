@@ -32,6 +32,7 @@ library(waveformtools) # This is a package made by our advisor PhD. student Joha
 library("tidyverse")
 library(mgcv) # The standard R package to use GAM's
 library(patchwork) #package used for plotting
+library()
 ```
 
 Then we need to load some data. For that we have created the function "load_case", which takes in a monitoring machine, the track of interest and finally the caseid. 
@@ -72,7 +73,7 @@ We now have the right subset of our AWP data, and we can simply plot it like so:
 plot_awp(awp_data = sub_awp)
 ```
 
-Now, as stated in the introduction, we are interested in finding the inspiration of the airway pressure, which is the beginning of a breath. For that we have created the function "get_inspiration_start". It works by applying a convolution filter of the form (-1,-1,-1,-1,-1,-1,-1,-1,0,1,1,1,1,1,1,1,1) (note: stats::filter takes the convolution filter in reverse, so we input the reverse of this). This creates a waveform which peaks at sudden large changes in amplitude. This means that we can use a standard peak-finding algorithm on the convolution, to find the inspirations.
+Now, as stated in the introduction, we are interested in finding the inspiration of the airway pressure, which is the beginning of a breath. For that we have created the function "get_inspiration_start". By default, it works by applying a convolution filter of the form (-1,-1,-1,-1,-1,-1,-1,-1,0,1,1,1,1,1,1,1,1) (note: stats::filter takes the convolution filter in reverse, so we input the reverse of this). This creates a waveform which peaks at sudden large changes in amplitude. This means that we can use a standard peak-finding algorithm on the convolution, to find the inspirations.
 
 ```{r}
 insp_start <- VitalDBR::get_inspiration_start(sub_awp)
@@ -88,7 +89,6 @@ And we can then plot the inspirations on the AWP signal:
 plot_awp(awp_data = sub_awp, add_insp_start = 'yes', insp_start_data = insp_start)
 ```
 
-
 ## Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
 To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
 
@@ -99,8 +99,6 @@ sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = sta
 ```{r echo=FALSE}
 knitr::kable(head(sub_art))
 ```
-
-
 
 ```{r}
 dygraph_signal(sub_art, 2, 3)
@@ -138,6 +136,35 @@ knitr::kable(head(beats_indexed))
 ```
 
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
+
+```{r}
+pp_plott_color <- function(beats_indexed_data, insp_start_data) {
+  beats_indexed_data <- beats_indexed_data[!is.na(beats_indexed_data$ann_n), ]
+  min <- min(na.omit(beats_indexed$ann_n))
+  max <- max(na.omit(beats_indexed$ann_n))
+  myvec <- to_vec(for (x in c(min:max)) for (y in c('Cycle no.')) paste(y,x))
+  
+  ggplot(beats_indexed_data, aes(time, PP)) +
+    geom_line() +
+    # insp_n is a unique (consecutive) number for each respiratory cycle
+    geom_point(aes(color = as.factor(ann_n)), show.legend = TRUE, size = 3) +
+    geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
+               data = insp_start_data) +
+                         theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') +
+    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino')) + 
+    scale_color_discrete(name = 'Respiratory Cycle', breaks = c(min:max), labels = myvec)
+
+
+
+}
+
+pp_plott_color(beats_indexed, insp_start)
+```
+
+```{r}
+min(na.omit(beats_indexed$ann_n))
+```
+
 
 ```{r fig.width = 12, fig.align="center"}
 pp_plot_color_and_index(beats_indexed, insp_start)
@@ -429,21 +456,5 @@ Generelt til udvikling:
 
 Spørgsmål: 
 - Hvis vi skal bruge ART_MBP skal vi vel også restricte vores cases til dem der er optaget på SOLAR8000?
-- Skal vi definerer PPV udfra et tal eller to tal som beskrevet i beskrivelsen af PPV_thresh
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+- Skal vi definerer PPV udfra et tal eller to tal som beskrevet i beskrivelsen af PPV_threshx
 

@@ -11,6 +11,9 @@ load_case(tname, caseid)
 
 \item{caseid}{A case id, from which you want to load the track given as tname}
 }
+\value{
+A dataframe with values from the specified track name and track id
+}
 \description{
 Main function for loading in data
 }
