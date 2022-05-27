@@ -49,6 +49,7 @@ data$ppv_avg_first30 <- round(data$ppv_avg_first30, 4)
 data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
 data$age <- as.integer(data$age)
 data$optype <- as.factor(data$optype)
+
 ##### Remove optype for now
 data <- select(data, -"optype")
 ######
@@ -90,7 +91,6 @@ plot(icu,r,ylab="Residuals", xlab="Days in ICU")
 abline(0,0)
 qqnorm(r,ylab="Residuals")
 qqline(r)
-
 ```
 On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity***, since the variance seems to be dependent on days in ICU. 
 We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This does not invalidate our regression coefficients, but prevents us from using tests like ANOVA, that assume normal errors. ***
@@ -99,10 +99,8 @@ As our data breaks various assumptions, we will not comsider the linear regressi
 
 Let's inspect our dependent variable then.  
 ```{r}
-#table(data$icu_days)
 count <- table(factor(icu, levels = 0:81))/length(icu)
 barplot(count)
-# den her skal også vise halen
 ```
 We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 But taking a closer look, we see that there are way to many 0-observations for it to be a simple poisson distribution. 
@@ -110,7 +108,7 @@ But taking a closer look, we see that there are way to many 0-observations for i
 sum(data$icu_days==0)/sum(nrow(data))
 ```
 We can actually see that over 60% of our observations are 0. 
-We also see some extremly large values like 82, indicating a distribution with a heavy tail.
+We also see some extremely large values like 82, indicating a distribution with a heavy tail.
 These things further back the notion that linear regression is not the right choice for this data.
 Therefore we will introduce the idea of Generalized linear models, to combat these problems. 
 
@@ -124,18 +122,20 @@ The link function converts the expected value of our dependent variable to a lin
 This means we can formulate the GLM as:
 $$ E[Y|X] = g^{-1}(\beta X ) $$
 When using GLM's in r, we choose the "family", which decides the link function $g()$ and the appropriate distribution of the errors. When choosing "poisson" as our family, we choose the log function which ensures that as our link function and poisson distribution for our errors.
+A standard linear regression is actually just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function!
+
 When we introduce the log link function to the formula above it becomes
 $$ log(E(Y|X)) = \beta X $$
 $$ E[Y|X] = e^{\beta X} $$
 And when we reintroduce the poisson error term, we get our final model:
 $$ Y \sim Poisson( e^{\beta X} )  $$
 
-This is the model we will try now.
+This is the model we will try now. 
+Another reason we use GLM's is that they don't assume homoskedacity, as 
 
 
-## Skal lige skrives naturligt ind
-A standard linear regression is just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function.
-GLM's don't assume homoskedacity, as the variance 
+
+
 
 
 ## Poisson GLM
@@ -167,24 +167,24 @@ The reason why we don't want overdispersion, is that when the model is overdispe
 
 This means that we will not regard the simple poisson regression as valid, and therefore not include it in the coming comparison between models.
 
+
+
 Instead we will now try with the negative binomial distribution.
 ## Negative binomial distribution
 The negative binomial distribution is similar to the poisson, but it has a dispersement parameter, that influences the variance. 
 If Y us distributed as 
-$$Y \sim NB(r,p) ={k+r-1 \choose k} \cdot (1-p)^r p^k $$
+$$Y \sim NB(r,p) $$
 where r is the number of failures until the experiment is stopped and p is the probability of success, the expected value and variance can be defined as follows:
 
-$$ E[Y] = \frac{pr}{1-p}$$
-$$ Var[Y] = \frac{pr}{(1-p)^2}$$
-But the negative binomial distribution can be reformulated as: 
-$$\operatorname{Pr}(X=k)=\frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+m}\right)^{r}\left(\frac{m}{r+m}\right)^{k} \quad \ \ k=0,1,2, \ldots$$
-(der er en ok forklaring på det her på wikipedia, skal jeg gå mere i dybden?)
-https://en.wikipedia.org/wiki/Negative_binomial_distribution
-And the expected value and variance can then be derived as:
+But the negative binomial distribution can also be formulated as a poisson distribution with an added Gamma noise variable $r$ which has mean 1 and a scale parameter $v$.
+This means that we can formulate the Negative Binomial distribution in terms of it's mean and a dispersement variable $r$
+$$Y \sim NB(\mu, \alpha)  = \frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+\mu}\right)^{r}\left(\frac{\mu}{r+\mu}\right)^{k} $$
+This in itself is not that useful, but it means that now we can define the mean and variance of the negative binomial distribution as:
 $$E[Y] = m $$
 $$Var[Y] = m+\frac{m^2}{r} $$
-Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. 
-Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula then becomes:
+Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. Note that as this dispersion paramter gets larger and larger, the variance converges to the same value as the mean, and then the negative binomial distribution magically turns into the poisson distribution.
+
+Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula for the regression mean becomes:
 $$Y \sim NB(e^{\beta X}, r)  $$
 Running the regression in R gives us the following result:
 ```{r}
@@ -266,8 +266,6 @@ summary(zi_nbin_reg)
 ```
 
 ------ FORTOLK -------
-
-
 
 # Compound poisson regression
 Now we will explore "compound poisson regression" as an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
