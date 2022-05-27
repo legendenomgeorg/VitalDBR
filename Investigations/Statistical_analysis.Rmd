@@ -7,16 +7,10 @@ output:
     math: katex
 ---
 ```{r, message=FALSE}
-library(vcd)
 library(MASS)
-library(rcompanion)
-library(jtools)
-library(rlang)
-library(broom.mixed)
 library(pscl)
 library(cplm)
 library(tweedie)
-library(performance)
 library("tidyverse")
 library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
@@ -402,3 +396,6 @@ https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simula
 
 https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
 https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
+
+
+
