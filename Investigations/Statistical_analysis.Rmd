@@ -25,7 +25,13 @@ library(MuMIn)
 
 ```
 
+## Motivation for statistical analysis:
+As stated in the introduction, we want to look into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit)
 
+
+
+
+## Analysis
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
 data <- read.csv("../Investigationsdf30.csv")
@@ -138,12 +144,7 @@ Even though we probably have too many zeros as we saw earlier, we will still try
 summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log")))
 ```
 
-```{r}
-sum(pois_reg$residuals)^2/pois_reg$df.residual
-```
-
------ FORTOLK -------
-
+------ FORTOLK ----- 
 
 If we do some further investigation, we can also observe that the mean is not equal to the variance:
 ```{r}
@@ -155,16 +156,16 @@ When the variance is larger than the mean, we are working with as so-called "ove
 
 
 # Overdispersement
-We can test for overdispersement by deviding the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1.
+We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1.
 
 ```{r}
 pois_reg$deviance/pois_reg$df.residual
 ```
-As we can see our model is clearly over dispersed
+As we can see our model is clearly overdispersed
 
 The reason why we don't want overdispersion, is that when the model is overdispersed, we underestimate standard errors of the coefficients, and when we underestimate those, we get too optimistic p-values. This fits well with the coefficient summary above, where almost all coefficients are highly significant (https://stats.stackexchange.com/questions/459864/overdispersion-in-fitted-generalized-linear-model-with-insignificant-regression)
 
-This means that we will not regard the simple poisson regression as valid, and therefore not include it in the coming comparissons between models.
+This means that we will not regard the simple poisson regression as valid, and therefore not include it in the coming comparison between models.
 
 Instead we will now try with the negative binomial distribution.
 ## Negative binomial distribution
@@ -183,9 +184,9 @@ And the expected value and variance can then be derived as:
 $$E[Y] = m $$
 $$Var[Y] = m+\frac{m^2}{r} $$
 Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. 
-Now, when fitting the negative binomial we can express it in terms of it's mean through a log link and $r$ , which means that the formula then becomes:
+Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula then becomes:
 $$Y \sim NB(e^{\beta X}, r)  $$
-
+Running the regression in R gives us the following result:
 ```{r}
 nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
 summary(nbin_reg)
@@ -213,7 +214,7 @@ Which is a binomial GLM, that predicts the odds of seeing an event given a vecto
 
 The second is a poisson distribution 
 $$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
-The $\pi$ present in both models are the mixing coefficient determining how much emphasis we give to each model
+Where $ \pi$ is the probability of of extra zeros
 
 
 https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
@@ -222,13 +223,13 @@ https://en.wikipedia.org/wiki/Zero-inflated_model
 https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
 
 These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "zeroinfl" package. 
-There are various formulations we can use, depending on how we believe the variables influence each part of the model:
+There are various formulations we can use, depending on how we believe the variables influence each part of the model. For example we can write the formula as:
 
 ```{r}
 pscl::zeroinfl(icu_days ~ . , data=data, dist="poisson")
 ```
 
-If we believe that the variables both influence the zero inflation AND the poisson distribution
+If we believe that all the variables both influence the zero inflation AND the poisson distribution
 
 Or we can do:
 ```{r}
@@ -251,11 +252,10 @@ data %>% filter(emop==0, icu_days==0) %>% nrow()
 data %>% filter(emop==1, icu_days==0) %>% nrow()
 ```
 
+We also add all variables, that are not a result of the operation. This is because they do not indicate anything about the operation, but instead about the general condition of the patient before the operation. These are every variable but: ppv_under_5, ppv_under_8 and ppv_avg_last_30 .
 
-We also add all variables, that are not a result of the operation. This is because they do not indicate anything about the operation, but instead about the general condition of the patient. These are every variable but: ppv_under_5, ppv_under_8 and ppv_avg_last_30 .
 (her burde vi adde knifte_time, men så er der for mange variable i modellen ift data :i ) 
 
-------- FORTOLKNING ---------
 
 
 # Zero inflated negative binomial
@@ -275,7 +275,7 @@ Now we will explore "compound poisson regression" as an even more advanced way o
 Our compound distribution, often referred to as the "Compound Poisson-Gamma distribution" is defined as: 
 $$  Y = \sum_i^T X_i$$
 Where
-$$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \gamma), \ \ T \perp X_{i}$$
+$$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \beta), \ \ T \perp X_{i}$$
 Where $\perp$ means independence between two random variables.
 
 To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. 
@@ -286,17 +286,22 @@ This means that we can model our dependent variable as:
 $$ Y \sim CPois(\mu_i, \phi, \rho)$$
 Where the parameters are defined as so:
 
-- $\mu = E(Y)$ is the mean, and is equal to the design matrix and the regression coefficients through a link function $\eta$ as so: $\eta (\mu) = X \beta$. The link function is set to logarithmic. 
+- $\mu = E(Y)$ is the mean.
 
 - $\phi$  is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
 
 - $\rho$ is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated here: https://en.wikipedia.org/wiki/Tweedie_distribution under "related distributions", the index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
 
+In this form the expected value and variance is given by:
+$$E[Y] = \mu $$
+$$ Var[Y] = \phi \cdot \mu^\rho $$
+As seen previously, we can link the mean to the linear predictors through the log function. And we can finally write it in the same fashion as the two previous GLMs
+$$ Y \sim CPois(e^{X\beta}, \phi, \rho)$$
 
 https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
 https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
 
-We can do a compound poisson regression using the library "CPLM" 
+We can finally do this compound poisson regression using the library "cplm" 
 ```{r}
 c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
 summary(c_pois_reg)
@@ -321,12 +326,9 @@ The concept is the same, but our model is not only penalized by the amount of pa
 
 
 ## Calculating metrics
-Caculating AICc and BIC for the Compound poisson regression has to be done manually for some reason
+Calculating AICc and BIC for the Compound poisson regression has to be done manually:
 ```{r}
 # Calculating BIC for compound poisson glm
-# Found this in a very obscure gitlab repo for bayesian networks and modified it for our use
-# https://gitlab.univ-nantes.fr/petit-j-2/bnscore
-
 logLik_tweedie <-
   function(cpglm_obj) {
     # compute the density with the optimal parameters and the model coefficients
@@ -334,19 +336,16 @@ logLik_tweedie <-
                               mu = cpglm_obj$fitted.values, 
                               xi = cpglm_obj$p, 
                               phi = cpglm_obj$phi)
-    # we add 2 to the number of parameters, since the dispersion was estimated for computing
-    # the log-likelihood and the parameter p was optimized
+    # we add 2 to the number of parameters, since the dispersion was estimated and the index parameter was optimized
     k = length(cpglm_obj$coefficients) + 2
-    return( c(sum(log(dens)), k))
   }
 
 logliks <- logLik_tweedie(c_pois_reg)[1]
 N <- nrow(data)
-k = logLik_tweedie(c_pois_reg)[2] #number of parameters in model
+k = logLik_tweedie(c_pois_reg)[2] # number of parameters in model
 BIC_c_pois_reg <- -2*logliks+log(N)*k
 
-
-# also calculating AIC
+# also calculating AICc
 AICc_c_pois_reg <- c_pois_reg$aic + (2*k^2+2*k)/(N-k-1)
 
 ```
@@ -367,6 +366,7 @@ colnames(model_metrics) <- model_names
 rownames(model_metrics) <- metrics
 model_metrics[1,] <- aicc_models
 model_metrics[2,] <- bic_models
+
 model_metrics
 ```
 
@@ -385,9 +385,9 @@ Operation type is definitely a confounder in our analysis. Some operations will 
 For all of our "preop" variables, it would be of great benefit to jhave a corresponding "postop" variable. 
 
 
-
 ## Conclusion
 In conclusion we see no correlation between PPV and days in the ICU.
+
 
 
 
