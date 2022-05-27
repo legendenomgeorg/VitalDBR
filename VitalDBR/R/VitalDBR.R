@@ -168,7 +168,7 @@ pp_plot <- function(insp_start_data, beats_data) {
 #' @export
 #' @param beats_indexed_data Beats with indexes data
 #' @param insp_start_data Inspiration start data
-pp_plott_color <- function(beats_indexed_data, insp_start_data) {
+pp_plot_color <- function(beats_indexed_data, insp_start_data) {
   beats_indexed_data <- beats_indexed_data[!is.na(beats_indexed_data$ann_n), ]
   min <- min(na.omit(beats_indexed$ann_n))
   max <- max(na.omit(beats_indexed$ann_n))
