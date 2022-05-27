@@ -7,7 +7,6 @@ output:
     math: katex
 ---
 ```{r, message=FALSE}
-#From CRAN
 library(vcd)
 library(MASS)
 library(rcompanion)
@@ -22,16 +21,8 @@ library("tidyverse")
 library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
+library(MuMIn)
 
-# It is a bit cumbersome to install  "rethinking" but here is what you need:
-#-----------------------
-# devtools::install_github("stan-dev/cmdstanr")
-# install.packages(c("coda","mvtnorm","devtools","loo","dagitty"))
-# devtools::install_github("rmcelreath/rethinking")
-# install_cmdstan() 
-#------------------------
-
-library(rethinking)
 ```
 
 
@@ -314,59 +305,28 @@ summary(c_pois_reg)
 (Indsæt analyse af coefficienter)
 
 # Comparing all models
-## Graphical overview of density functions
-If we would like a graphical view of how the distributions overlay the histogram, then the regular poisson and the compound poisson is trivial. But for the zero inflated model, there exists no parametric way to define the density function on a given dataset as the function is not defined at 0.  (NEEDS CITATION). 
-Therefore to get an idea of what the density could look like in a zero-inflated model we can use the package "rethinking" (from the famous bayesian book "Statiscical Rethinking" by Richard Mc Elreath) to plot the distribution given the probability of observing 0 and the mean of the distribution.
-
-```{r}
-
-mu  <- mean(icu)
-xi = c_pois_reg$p
-phi = c_pois_reg$phi
-x <- seq(0, 82)
-barplot(count, xlim=c(0,15))
-lines(x, tweedie::dtweedie(x, xi, mu, phi), col="red", type='l') # Compound
-
-lines(dpois(x=x,lambda=mu),type="l", col="blue") # Normal poisson
-
-dispersion <- nbin_reg$theta
-lines(dnbinom(x, size = dispersion, mu = mu ),type="l", col="orange") # Negative binomial
-
-p = sum(data$icu_days==0)/sum(nrow(data))
-lines(rethinking::dzipois(x, p = p , lambda = mean(icu)),type="l", col="green") # Zero Inflated poisson
-
-
-lines(countreg::dzinbinom(x=x, mu=mu, theta = zi_nbin_reg$theta, pi= p), type="l", col="darkorchid1") # Zero Inflated negative binomial
-# er ikke sikker på mu parameteren i den sidste
-```
-Her skal vi nok lige undersøge hvorfor de ikke starter det samme sted hehe
-
 ## Comparing models through metrics:
-We are looking at the following metrics:
-### AIC (Akaika information criteria)
+We will compare our models with the metrics AICc and BIC. We look for the model with the lowest of these values.
+### AIC
+AIC is defined as:
+$$AIC =  2k - 2log(LL) $$
+Where k is the amount of parameters in our model and LL is the log-likelihood estimate.
+We can break AIC into two parts. First, when the $2k$ part penalizes when we add more parameters to our model ie. it penalizes complexity and $-2log(LL)$ decreases as our model gets better at explaining our data, this rewards us for building models that fit our data well.
 
+In this analysis we are using AICc which is a different formulation that corrects for small samples. As the number of sample goes to infinity, AICc converges to AIC, so there is no reason not to use AIC, especially since we do not have extremely many samples.
 ### BIC 
+BIC is the Bayesian information criteria, and its formula is pretty similar to AIC's:
+$$BIC = klog(n)-2log(LL) $$
+The concept is the same, but our model is not only penalized by the amount of parameters in the model, $k$, but also by the amount of data in our model $n$. 
 
 
-
-### Deviance (Why it doesnt work for zero inflated models)
-
-
-
-### Why we don't use RMSE
-
-
-
-
-
-
-Caculating BIC for the Compound poisson regression has to be done manually for some reason
+## Calculating metrics
+Caculating AICc and BIC for the Compound poisson regression has to be done manually for some reason
 ```{r}
 # Calculating BIC for compound poisson glm
 # Found this in a very obscure gitlab repo for bayesian networks and modified it for our use
 # https://gitlab.univ-nantes.fr/petit-j-2/bnscore
 
-c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
 logLik_tweedie <-
   function(cpglm_obj) {
     # compute the density with the optimal parameters and the model coefficients
@@ -385,69 +345,49 @@ N <- nrow(data)
 k = logLik_tweedie(c_pois_reg)[2] #number of parameters in model
 BIC_c_pois_reg <- -2*logliks+log(N)*k
 
+
+# also calculating AIC
+AICc_c_pois_reg <- c_pois_reg$aic + (2*k^2+2*k)/(N-k-1)
+
 ```
 
 Creating a table of the metrics:
 ```{r}
 models <- list(nbin_reg, zi_pois_reg,zi_nbin_reg,c_pois_reg)
-aic_models <- sapply(models, AIC)
-bic_models <- sapply(models[-c(4)], stats::BIC)
-rmse_models <- sapply(models, rmse)
-bic_models[4] <- BIC_c_pois_reg  
- 
-deviance_models <- c(nbin_reg$deviance, NA, NA, c_pois_reg$deviance)
-metrics <- list("AIC","BIC","Deviance")
 model_names <- list('nbin_reg','zi_pois_reg','zi_nbin_reg','c_pois_reg')
+metrics <- list("AICc","BIC")
+
+aicc_models <- sapply(models[-c(4)], AICc)
+aicc_models[4] <- AICc_c_pois_reg
+bic_models <- sapply(models[-c(4)], stats::BIC)
+bic_models[4] <- BIC_c_pois_reg  
+
 model_metrics <- data.frame(matrix(ncol=length(model_names), nrow = length(metrics)))
 colnames(model_metrics) <- model_names
 rownames(model_metrics) <- metrics
-model_metrics[1,] <- aic_models
+model_metrics[1,] <- aicc_models
 model_metrics[2,] <- bic_models
-model_metrics[3,] <- deviance_models
 model_metrics
 ```
-Kræver en god forklaring
 
+Looking at the table, we see that generally negative binomial models result in better models. Depending on your objective you might choose either. The standard negative binomial regression scores lower, but it also has almost half the amount of parameters:
+```{r}
+# plus one for the dispersion parameter
+length(nbin_reg$coefficients)+1
+length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +1
 
-https://stackoverflow.com/questions/21807118/r-codes-for-tweedie-compound-poisson-gamma
-
-## Conclusion
-TROR konklusionen blir almindelig nbin
+```
+In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liqied given to the patient during the operation. 
 
 ## Discussion of confounders
-
-
-## TO DO:
-- Forklare coefficienter
-- forklaring af residual deviance vs null deviance (se stack link)
-- analyser ALLE coefficenter med exp(coef(model)) https://rpubs.com/kaz_yos/pscl-2
+(Skal skrive mere grundigt)
+Operation type is definitely a confounder in our analysis. Some operations will almost certainly make you stay in the icu for over 0 days, and some operations are just simple operations, that will almost never result in an ICU stay. 
+For all of our "preop" variables, it would be of great benefit to jhave a corresponding "postop" variable. 
 
 
 
+## Conclusion
+In conclusion we see no correlation between PPV and days in the ICU.
 
 
 
-
-```{r}
-# Jeg tror ikke vi skal bruge prediction til noget, men jeg beholder lige koden til det
-##################
-library(caTools)
-set.seed(8484950) 
-sample = sample.split(data, SplitRatio = .90)
-train = subset(data, sample == TRUE)
-test  = subset(data, sample == FALSE)
-train_linear_model <-glm(icu_days ~ . , data=train, family="gaussian")
-train_nbin_reg <- MASS::glm.nb(icu_days ~ . , data=train)
-train_zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| emop, data=train, dist="poisson")
-train_zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| emop , data=train, dist="negbin")
-train_c_pois_reg <- cplm::cpglm(icu_days ~ . , data = train, link = "log")
-
-train_models <- list(train_linear_model, train_nbin_reg,  train_zi_pois_reg, train_zi_nbin_reg, train_c_pois_reg )
-
-calculate_prediction <- function(model){
-  p <- predict(model, test)
-  return(sqrt(mean((test$icu_days-p)^2)))
-}
-prediction_rmse <- data.frame(lapply(train_models, calculate_prediction))
-####################
-```
