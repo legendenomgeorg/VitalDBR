@@ -138,27 +138,7 @@ knitr::kable(head(beats_indexed))
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
 
 ```{r}
-pp_plott_color <- function(beats_indexed_data, insp_start_data) {
-  beats_indexed_data <- beats_indexed_data[!is.na(beats_indexed_data$ann_n), ]
-  min <- min(na.omit(beats_indexed$ann_n))
-  max <- max(na.omit(beats_indexed$ann_n))
-  myvec <- to_vec(for (x in c(min:max)) for (y in c('Cycle no.')) paste(y,x))
-  
-  ggplot(beats_indexed_data, aes(time, PP)) +
-    geom_line() +
-    # insp_n is a unique (consecutive) number for each respiratory cycle
-    geom_point(aes(color = as.factor(ann_n)), show.legend = TRUE, size = 3) +
-    geom_vline(aes(xintercept = time), color = '#63A0E1', linetype = 'longdash', size = 0.8,
-               data = insp_start_data) +
-                         theme_classic() + labs(title = 'By time in seconds', x = 'Time (sec)', y = 'PP (mmHg)') +
-    theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'), plot.subtitle = element_text(hjust = 0.5, size = 15, face = 'bold', color = '#63A0E1', family = 'Palatino')) + 
-    scale_color_discrete(name = 'Respiratory Cycle', breaks = c(min:max), labels = myvec)
-
-
-
-}
-
-pp_plott_color(beats_indexed, insp_start)
+pp_plot_color(beats_indexed, insp_start)
 ```
 
 ```{r}
