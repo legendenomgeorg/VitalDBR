@@ -224,8 +224,8 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
   interval <- 120
   iterations <- floor(op/interval)
   
-  first30_avg <- 0
-  last30_avg <- 0
+  first_deque <- deque()
+  last_deque <- deque()
   
   data <- c(matrix(NA, nrow=iterations+2))
   skip_to_next <- FALSE
@@ -248,11 +248,13 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
     PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
     data[i] <- PPV
     
-    if (i <= 15){
-      first30_avg <- first30_avg + PPV
+    if (length(first_deque) < 15){
+      push(first_deque, PPV)
+      push(last_deque, PPV)
     }
-    if (i > (iterations-15)){
-      last30_avg <- last30_avg + PPV
+    if (length(last_deque) > 14){
+      popback(last_deque)
+      push(last_deque, PPV)
     }
     
     cat("Iteration",i, "out of ", iterations,". For case:",case,"\n")
@@ -265,12 +267,18 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
     if(skip_to_next) { 
       data[i] <- NA
       next 
-      } 
+    }
   }
-  first30_avg <- first30_avg / 15
-  last30_avg <- last30_avg / 15
-  data[iterations+1] <- first30_avg
-  data[iterations+2] <- last30_avg
+  
+  first30_avg <- 0
+  last30_avg <- 0
+  for (i in 1:(min(15, length(first_deque)))){
+    first30_avg <- first30_avg + pop(first_deque)
+    last30_avg <- last30_avg + pop(last_deque)
+  }
+  
+  data[iterations+1] <- first30_avg / min(15, iterations)
+  data[iterations+2] <- last30_avg / min(15, iterations)
   
   return(data)
 }
@@ -330,16 +338,21 @@ process_cases <- function(data){
   return(data)
 } 
 
-startTime <- Sys.time()
-ppv_data <- process_cases(merged)
-endTime <- Sys.time()
-print(endTime - startTime)
-View(ppv_data)
-#})
-path <- getwd()
-filename = paste(path, 'df30.csv',sep = '')
-write.csv(ppv_data, filename)
+#startTime <- Sys.time()
+#ppv_data <- process_cases(merged)
+#endTime <- Sys.time()
+#print(endTime - startTime)
+#View(ppv_data)
+##})
+#path <- getwd()
+#filename = paste(path, 'df30.csv',sep = '')
+#write.csv(ppv_data, filename)
 
 ```
+
+```{r}
+process_cases(merged[20:22,])
+```
+
 
 
