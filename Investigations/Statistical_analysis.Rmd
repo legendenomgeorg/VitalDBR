@@ -11,6 +11,7 @@ library(MASS)
 library(pscl)
 library(cplm)
 library(tweedie)
+library(broom)
 library("tidyverse")
 library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
@@ -115,13 +116,17 @@ summary(linear_model <-lm(icu_days ~ . , data=data))
 We will refrain from interpret coefficients, before we have decided on the best model. So to determine whether our model violates its assumptions. For the linear regression we do a classic plot of the residuals against the dependent variable and a qqplot
 
 ```{r}
-r = linear_model$residuals
-par(mfrow=c(1,2))
-plot(icu,r,ylab="Residuals", xlab="Days in ICU")
-abline(0,0)
-qqnorm(r,ylab="Residuals")
-qqline(r)
+residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0) +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot")
+
+qqplot <- ggplot(broom::augment(linear_model), aes(sample = .resid)) +
+  geom_qq() + geom_qq_line() + xlab("Theoretical Quantiles") + ylab("Residuals") + ggtitle("Normal QQ-plot")
+#Skal kombineres man kan ikke få lov til at knitte når jeg gør det
+residualplot
+qqplot
 ```
+
+
+
 On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity***, since the variance seems to be dependent on days in ICU. 
 We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This does not invalidate our regression coefficients, but prevents us from using tests like ANOVA, that assume normal errors. ***
 
@@ -130,7 +135,12 @@ As our data breaks various assumptions, we will not consider the linear regressi
 Let's inspect our dependent variable then.  
 ```{r}
 count <- table(factor(icu, levels = 0:81))
-barplot(count)
+
+icu_barplot<-ggplot(data=as.data.frame(count), aes(x=as.integer(Var1), y=Freq)) +
+  geom_bar(stat="identity") +
+  ggtitle("Barplot of ICU days")+
+  xlab("Days in ICU") + ylab("# observations")
+icu_barplot
 ```
 We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 But taking a closer look, we see that there are way too many 0-observations for it to be a simple poisson distribution. 
@@ -283,10 +293,10 @@ zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv_avg_la
 summary(zi_nbin_reg)
 ```
 
------- FORTOLK -------
+Now we have tried normal GLM and zeroinflated GLM, but before we compare the models and interpret the results, we will lastly explore the "Compound Poisson Regression.
 
 ## Compound poisson regression
-Now we will explore "compound poisson regression" as an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
+The compound poisson regression is an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
 
 Our compound distribution, often referred to as the "Compound Poisson-Gamma distribution" is defined as: 
 $$  Y = \sum_i^T X_i$$
@@ -294,14 +304,11 @@ Where
 $$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \beta), \ \ T \perp X_{i}$$
 Where $\perp$ means independence between two random variables.
 
-In our case, this formula can be interpreted with an example. Let's say we are looking at the influence of our independent variables on patients spending 29 days in the ICU ($Y=29$). Then this is comprised of two different stochastic variables. T which determines the number of cases where the patients spend 29 days in the ICU. In our case, the number of patients is given by the poisson distribution. 
+In our case, this formula can be interpreted with an example. Let's say we are looking at the influence of our independent variables on patients spending 29 days in the ICU ($Y=29$). Then this is comprised of two different stochastic variables. T which determines the number (count) of patients who spend 29 days in the ICU. In our case, the number of patients is given by the poisson distribution. 
 And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution.
-To visualize this, here is the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the joint distribution of those variables is the compound poisson distribution.
-
-
+To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T.
 ```{r}
-count <- table(factor(icu, levels = 0:81))
-barplot(count, xlab = "X ~ Gamma(alpha, beta)", ylab = "T ~ poisson(lambda)")
+icu_barplot + ggtitle("Compound Poisson Distribution") + xlab("X ~ Gamma(alpha, beta)") + ylab("T ~ poisson(lambda)")
 ```
 
 To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is not clearly defined. 
@@ -405,9 +412,8 @@ length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +
 In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liqied given to the patient during the operation. 
 
 ## Discussion of confounders
-(Skal skrive mere grundigt)
-Operation type is definitely a confounder in our analysis. Some operations will almost certainly make you stay in the icu for over 0 days, and some operations are just simple operations, that will almost never result in an ICU stay. 
-For all of our "preop" variables, it would be of great benefit to jhave a corresponding "postop" variable. 
+If we had access to the specific type of surgery, and a doctor that could determine whether they were dangerous or not, we could more accurately account for the confounder bias in our regression. Perhaps even divide into more levels of how likely that operation is to send you to the icu. This would in turn require more data, since we are balancing just around the point where we can't add any more variables to our zero inflated regressions, due to the size of the model. 
+
 
 
 ## Conclusion
@@ -428,6 +434,10 @@ zerocoef <- coef(summary(zi_nbin_reg))$zero
 exp(zerocoef[zerocoef[, 4] < 0.01, 1])
 ```
 ---- Fortolk ---
+
+
+## Future work:
+
 
 # Alle links jeg har brugt mere eller mindre
 (gode diagnostics til count data)
