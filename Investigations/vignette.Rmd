@@ -14,6 +14,9 @@ After that we show how to use the processed data and detected events to fit a Ge
 In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 <= PPV <= 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
+
+## The biological background
+
 # Fitting a gam
 ## Preparing everything
 Before we get started, we need a couple of packages. 
@@ -129,8 +132,8 @@ But we want to know which inspiration every pulse pressure measurement belongs t
 beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
 ```
 
-```{r }
-knitr::kable(head(beats_indexed), align = 'c') %>% kable_styling(position = "center")
+```{r echo=FALSE }
+knitr::kable(head(beats_indexed))
 ```
 
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
@@ -154,46 +157,34 @@ In our case this would translate to:
 $$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
 
 
-> THIS NEEDS TO BE FIXED :D
+
+## Why do we use a GAMs for modelling PPV?
+There exists other ways to calculate the PPV of the pulse pressure. They are often based on simpler methods from signal processing /time series analysis, where you calculate min, max and a time trend. They actually perform very well and are widely used for various purposes.
+The reason we use GAMs are first of all, that this is research and not industry. It has still not been definitely proved that GAM modelling of pulse pressure variation is more accurate than the normal methods, but our advisor Johannes' coming phd thesis seems to suggest it.
+Using a GAM we also get more insights and interpretability. It is possible to model uncertainty and confidence bounds, although we have not done that in this vignette, as it is not really relevant to what we are trying to answer. 
+
 
 ```{r}
 PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
 
 PP_gam <- gam(
-# The first parameter to the gam() function is the model specification,
-# supplied using formula notation:
-PP ~ # Left of the tilde (~) is our dependent variable PP
-# Right of the tilde is our independent variables.
-# Define a smooth function of insp_rel_index.
-s(ann_rel_index,
-k =10, # 10 knots.
-bs = "cc" # The basis is a cyclic cubic spline
-) +
-# Define a smooth function of time
-s(time,
-bs = "cr" # The basis is a natural cubic spline.
-# default k is 10. This will be fine here.
-),
-# We can specify the positions of the knots for each smooth.
-# If only two knots are specified for a cyclic spline, these will
-# set the positions of the limiting knot(s). The remaining knots will
-# be positioned automatically (at quantiles).
-knots = list(ann_rel_index = c(0,1)),
-# We use restricted maximum likelihood (REML) to fit the optimal smoothing parameter.
-# This is often the best choice, but not the default.
-method = "REML",
-data = PP_data
-)
+PP ~ 
+s(ann_rel_index,k =10,bs = "cc" ) +
+s(time,bs = "cr" ), knots = list(ann_rel_index = c(0,1)),
+method = "REML", data = PP_data)
 
 gratia::draw(PP_gam,
 residuals = TRUE)
 ```
-We need the last part of the right hand side, which is the intercept ( or is it the mean? or is that the same?):
+
+
 ```{r}
 alpha <- coef(PP_gam)[1] # intercept
 alpha
 ```
-Now we can construct the expected value of Y, the pulse pressure, through adding: Alpha, s(ann_rel_index) and s(time)
+
+
+
 
 
 Time to calculate PPV
@@ -207,23 +198,24 @@ splines <- predict(PP_gam, type = "terms")
 PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
 PPV
 ```
-# Association study - does PPV influence survival of patients?
-This part of the vignette revolves around utilizing what we have previously done, to make a large scale association study to understand whether the Pulse Pressure Variation (PPV) during an operation influences the outcome.
+
+# Association study - does PPV influence the number of days a patient spend in the ICU
+This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU.
 
 ## Creating the dataset
-To create the data set we need to calculate the PPV for every other minute of every operation... That is a lot of calculation! Therefore we have added the final dataset to the repo, such that you do not have to spend sleepless nights hoping that R doesn't crash during it's 1147th iteration.
+To create the data set we need to calculate the PPV for every other minute of every operation... That is a lot of calculation! Therefore we have added the final dataset to the repo as "df.csv" such that you do not have to spend sleepless nights hoping that R doesn't crash during it's 1147th iteration.
 But before we can calculate the PPV we need to restrict our dataset to the following criteria:
 - The surgery approach should be "open"
 - The department should be "General surgery"
-- The type of anasthesia should be "General"
+- The type of anesthesia should be "General"
 (These restrictions were decided by our advisers)
-We do that as such:
+We also add the end and start time of the operation, as we need that later
 ```{r}
 cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
       dplyr::filter(approach=="Open",
                 department=="General surgery",
                 ane_type=="General") %>%
-      dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi, opstart, opend)
+      dplyr::select(caseid, opstart, opend)
 knitr::kable(head(cases))
 ```
 
@@ -236,6 +228,7 @@ tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
 
 knitr::kable(head(tracks))
 ```
+
 We then join those two datasets together by their case id, which results in the final dataset:
 ```{r}
 merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
@@ -245,8 +238,31 @@ knitr::kable(head(merged))
 
 And now for the part where we combine everything we have done so far to create the dataset we need to be able to do statistical analysis on the effects of the PPV on patients. 
 
-INDSÆT OVERORDNET FOKLARING AF HVAD FUNKTIONEN GØR
 
+
+### Calculating PPV
+The algorithm below, gets a dataset where it extracts the current caseid. Then it proceeds to load the ART and AWP timeseries belonging to those caseids. Then for each 2 minute intervals it calculates the inspiration, the systolic and diastolic peaks. From those it models a GAM like above and from that GAM it calculates the Pulse Pressure Variation. The PPV is then added to a list, which contains all the PPV measurements from that case. This means that it if the operation is 60 minutes, it creates a 30 long list of PPV measurements, from which it calculates the following variabels:
+
+* PPV_under5
+  + This is a number between 0 and 1, indicating what proportion of the measurements are under 5. 
+
+* PPV_over8
+  + This is a number between 0 and 1, indicating what proportion of the measurements are over 8 
+  
+* PPV_avg_first_30
+  + This is the average of the first 15 measurements
+  + We measure this to get an indication of the patients PPV pre-operation, as this is not a measure we have
+  
+* PPV_avg_last_30
+  + This is the average of the last 15 measurements
+  + We use this to see whether it matters to for example have a lowered PPV as a result of the operation
+  
+These variables are then used later in the statistical analysis to determine whether they influence the outcome. 
+This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements, mean that we can't include ALL of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. The interval stems from domain knowledge, and we constrain it between 0 and 1 as the proportion is more relevant than the amount of measurements below or above.
+
+Also 
+
+Here is the algorithm:
 ```{r}
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
@@ -373,17 +389,9 @@ process_cases <- function(data){
 
 
 Notes:
-
 - This is a very computationally intensive function. It took almost 16 hours to caculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
 
 - A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad that no "organic process" can have caused the quality decline.
-
-## Regression analysis
-
-Now that we have created our dataset, it 
-
-
-
 
 # Statistical Analysis
 
@@ -460,14 +468,16 @@ The independent variables we choose to do this study are the following:
 ## Analysis
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
+#data <- read.csv("../df.csv")
 data <- read.csv("../df.csv")
 cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
-cases <- cases %>% dplyr::select('caseid', 'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 'preop_pft', 'preop_cr', 'preop_alt', 'optype')
-
+cases <- cases %>% dplyr::select('caseid','icu_days','age','sex','asa','emop','bmi',
+                                  'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 
+                                 'preop_pft', 'preop_cr', 'preop_alt', 'optype')
 merged <- merge(x=data,y=cases,by="caseid")
 merged$knife_time <- (merged$opend - merged$opstart) / 3600
 data <- merged %>% dplyr::select(-'X', -'aneend', -'anestart', -'opend', -'opstart') %>% filter(preop_ecg == "Normal Sinus Rhythm")
-data <- dplyr::mutate_if(data, is.character, as.factor) %>% dplyr::select(-'caseid', -'death_inhosp', -'preop_ecg')
+data <- dplyr::mutate_if(data, is.character, as.factor) 
 data$sex <- ifelse(data$sex=='M', 1,0)
 data$preop_pft <- ifelse(data$preop_pft=='Normal',1, 0)
 data$knife_time <- round(data$knife_time, 2)
@@ -477,7 +487,7 @@ data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
 data$age <- as.integer(data$age)
 #
 data$dangerop <- ifelse(data$optype %in% c("Breast", "Thyroid", "Others"),0,1)
-data <- dplyr::select(data, -"optype")
+data <- dplyr::select(data, -"optype", -'preop_ecg',-'caseid')
 
 
 #####Hopefully we can remove this with the new data
@@ -486,7 +496,7 @@ data <- data[!(data$ppv_avg_last_30==0),]
 
 data <- na.omit(data)
 icu <- data$icu_days 
-
+data
 ```
 
 
