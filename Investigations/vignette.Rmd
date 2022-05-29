@@ -12,7 +12,7 @@ This vignette will show why VitalDBR is useful, if you want to do statistical an
 First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
 In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 <= PPV <= 8$. 
-When this dataset is built, we use the results to do a poisson regression regression with the icu-days as the dependent variable. Afterwards we compare the simple poisson regression to a zero-inflated poisson regression and a pseudo compound poisson regression.  We of course include other important features like age and BMI, and finally we discuss what confounding variables would have been relevant to include. 
+When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
 # Fitting a gam
 ## Preparing everything
