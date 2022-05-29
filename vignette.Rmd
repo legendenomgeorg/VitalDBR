@@ -14,10 +14,10 @@ After that we show how to use the processed data and detected events to fit a Ge
 In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
-Hello, Jonas was here. Georg was here
-
-
 ## The biological background
+
+(skal udfyldes)
+
 
 # Fitting a gam
 ## Preparing everything
@@ -151,6 +151,7 @@ pp_plot_color_and_index(beats_indexed, insp_start)
 
 
 ## Fitting the GAM
+(denne del skal udvides meget)
 
 We can generally write the GAM structure as:
 $$g(E(Y))=α+s_1(x_1)+⋯+s_p(x_p)$$
@@ -163,6 +164,8 @@ $$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
 There exists other ways to calculate the PPV of the pulse pressure. They are often based on simpler methods from signal processing /time series analysis, where you calculate min, max and a time trend. They actually perform very well and are widely used for various purposes.
 The reason we use GAMs are first of all, that this is research and not industry. It has still not been definitely proved that GAM modelling of pulse pressure variation is more accurate than the normal methods, but our advisor Johannes' coming phd thesis seems to suggest it.
 Using a GAM we also get more insights and interpretability. It is possible to model uncertainty and confidence bounds, although we have not done that in this vignette, as it is not really relevant to what we are trying to answer. 
+
+**------> Er de her årsager rigtige? Er der flere?**
 
 
 ```{r}
@@ -200,7 +203,7 @@ PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
 PPV
 ```
 
-# Association study - does PPV influence the number of days a patient spend in the ICU
+# Does PPV influence the number of days a patient spend in the ICU
 This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU.
 
 ## Creating the dataset
@@ -466,11 +469,13 @@ The independent variables we choose to do this study are the following:
   + Note that this is very broad, but it is our best way atm, to get an indicator of the severity     of the operation
   
 
+--------> Ift. variablerne her, kunne vi måske godt bruge lidt noter på hvorfor bla. creatinin var så vigtigt, og generelt de andre preop tal også. 
+
+
 ## Analysis
 First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
 ```{r}
-#data <- read.csv("../df.csv")
-data <- read.csv("../df.csv")
+data <- read.csv("df.csv")
 cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
 cases <- cases %>% dplyr::select('caseid','icu_days','age','sex','asa','emop','bmi',
                                   'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 
@@ -486,14 +491,9 @@ data$ppv_over8 <- round(data$ppv_over8, 4)
 data$ppv_avg_first30 <- round(data$ppv_avg_first30, 4)
 data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
 data$age <- as.integer(data$age)
-#
 data$dangerop <- ifelse(data$optype %in% c("Breast", "Thyroid", "Others"),0,1)
 data <- dplyr::select(data, -"optype", -'preop_ecg',-'caseid')
-
-
-#####Hopefully we can remove this with the new data
 data <- data[!(data$ppv_avg_last_30==0),] 
-#####
 
 data <- na.omit(data)
 icu <- data$icu_days
@@ -515,13 +515,12 @@ summary(linear_model <-lm(icu_days ~ . , data=data))
 We will refrain from interpreting coefficients, before we have decided on the best model. So to determine whether our linear regression model violates its assumptions, we do a classic plot of the residuals against the dependent variable and a qqplot.
 
 ```{r}
-residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0) +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot")
+residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0,color= "#f8766d") +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot") +theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 
 qqplot <- ggplot(broom::augment(linear_model), aes(sample = .resid)) +
-  geom_qq() + geom_qq_line() + xlab("Theoretical Quantiles") + ylab("Residuals") + ggtitle("Normal QQ-plot")
+  geom_qq() + geom_qq_line(color= "#f8766d" ) + xlab("Theoretical Quantiles") + ylab("") + ggtitle("Normal QQ-plot") + theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 #Skal kombineres man kan ikke få lov til at knitte når jeg gør det
-residualplot
-qqplot
+residualplot + qqplot
 ```
 
 
@@ -538,7 +537,8 @@ count <- table(factor(icu, levels = 0:81))
 icu_barplot<-ggplot(data=as.data.frame(count), aes(x=as.integer(Var1), y=Freq)) +
   geom_bar(stat="identity") +
   ggtitle("Barplot of ICU days")+
-  xlab("Days in ICU") + ylab("# observations")
+  xlab("Days in ICU") + ylab("# observations") +
+  theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 icu_barplot
 ```
 We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
@@ -713,7 +713,8 @@ And the other parameter X determines the chance of experiencing an event where y
 
 To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T (keeping T fixed and evaluating X).
 ```{r}
-icu_barplot + ggtitle("Compound Poisson Distribution") + xlab("X ~ Gamma(alpha, beta)") + ylab("T ~ poisson(lambda)")
+library(latex2exp)
+icu_barplot + ggtitle("Compound Poisson Distribution") + xlab(TeX("X ~ Gamma($alpha, beta$)")) + ylab(TeX("T ~ poisson($lambda$)"))
 ```
 
 To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is not clearly defined. 
@@ -820,6 +821,10 @@ In the end neither model really seem to be influenced by the pulse pressure vari
 Probably our biggest confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. 
 We actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
 
+
+**-------> Er der flere confounders?** 
+
+
 ## Conclusion
 In conclusion we see no correlation between PPV and days in the ICU. 
 
@@ -841,8 +846,9 @@ exp(zerocoef[zerocoef[, 4] < 0.01, 1])
 
 
 ## Future work:
+Our original research question was whether PPV influenced in hopsital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital. If we had access to more data, that would be very interesting to investigate.
 
-
+**------> Har i flere idéer til det her?**
 
 
 
