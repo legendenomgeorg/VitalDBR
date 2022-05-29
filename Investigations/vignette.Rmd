@@ -29,6 +29,7 @@ install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 library(comprehenr)
 library(kableExtra)
+library(knitr)
 ```
 
 
@@ -84,9 +85,6 @@ insp_start <- VitalDBR::get_inspiration_start(sub_awp)
 ```
 
 
-```{r echo=FALSE}
-knitr::kable(head(insp_start))
-```
 The function returns the times of the peaks in a dataframe
 And we can then plot the inspirations on the AWP signal:
 ```{r,fig.width = 16}
@@ -115,7 +113,7 @@ beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,] # we s
 
 
 ```{r echo=FALSE}
-knitr::kable(head(beats))
+knitr::kable(head(beats)) %>% scroll_box(width = "100%")
 ```
 
 Now we plot the Arterial blood pressure, together with the peaks and the inspiration:
@@ -134,9 +132,10 @@ But we want to know which inspiration every pulse pressure measurement belongs t
 beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
 ```
 
-```{r echo=FALSE }
-knitr::kable(head(beats_indexed))
+```{r echo=FALSE}
+knitr::kable(head(beats_indexed)) %>% scroll_box(width = "100%")
 ```
+
 
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
 
@@ -146,7 +145,7 @@ pp_plot_color(beats_indexed, insp_start)
 
 
 
-```{r fig.width = 16, fig.align="center"}
+```{r fig.width = 13, fig.align="center"}
 pp_plot_color_and_index(beats_indexed, insp_start)
 ```
 
@@ -497,8 +496,12 @@ data <- data[!(data$ppv_avg_last_30==0),]
 #####
 
 data <- na.omit(data)
-icu <- data$icu_days 
-data
+icu <- data$icu_days
+```
+
+
+```{r echo=FALSE}
+knitr::kable(head(data)) %>% scroll_box(width = "100%")
 ```
 
 
