@@ -16,7 +16,7 @@ library(profvis)
 library(data.table)
 library(RcppRoll)
 library(RcppArmadillo)
-library(sandwich)
+#library(sandwich)
 ```
 Det er åbenbart meget udfordrende at lave en funktion der kan tage en liste af argumenter, og så passe dem ind i filter funktionen, så det blir bare lige sådan her fremadrettet. Det hører nok også under basic r
 ```{r}
@@ -26,6 +26,8 @@ cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
                 ane_type=="General") %>%
       dplyr::select(caseid, death_inhosp, icu_days, age, sex, asa, emop, bmi, opstart, opend)
 cases
+
+# slet death in hosp
 ```
 
 Har fjernet den dårlige version
@@ -214,14 +216,20 @@ min_PP <- min(smooth)
 max_PP <- max(smooth)
 (max_PP - min_PP) / unname(intercept)
 }
+
 ppv_prepare <- function(case, start, end, data_art, data_awp){
   # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
   # men ellers er det bare at implemetere PPV udregningen her
   op <- end - start
   interval <- 120
   iterations <- floor(op/interval)
-  data <- c(matrix(NA, nrow=iterations))
+  
+  first30_avg <- 0
+  last30_avg <- 0
+  
+  data <- c(matrix(NA, nrow=iterations+2))
   skip_to_next <- FALSE
+  
   for (i in 0:iterations){
         try_catch <- tryCatch(
     {
@@ -237,7 +245,16 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
     s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
     knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
     splines <- predict(PP_gam, type = "terms")
-    data[i] <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+    PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+    data[i] <- PPV
+    
+    if (i <= 15){
+      first30_avg <- first30_avg + PPV
+    }
+    if (i > (iterations-15)){
+      last30_avg <- last30_avg + PPV
+    }
+    
     cat("Iteration",i, "out of ", iterations,". For case:",case,"\n")
     rm(PP_data)
     },
@@ -250,12 +267,21 @@ ppv_prepare <- function(case, start, end, data_art, data_awp){
       next 
       } 
   }
+  first30_avg <- first30_avg / 15
+  last30_avg <- last30_avg / 15
+  data[iterations+1] <- first30_avg
+  data[iterations+2] <- last30_avg
+  
   return(data)
 }
 
 process_cases <- function(data){
   ppv_under5 <- data.frame(matrix(NA, nrow = nrow(data)))
   ppv_over8 <- data.frame(matrix(NA, nrow = nrow(data)))
+  
+  ppv_first30 <- data.frame(matrix(NA, nrow = nrow(data)))
+  ppv_last30 <- data.frame(matrix(NA, nrow = nrow(data)))
+  
   counter <- 0 
   break_and_save <- FALSE
   for (caseid in data$caseid){
@@ -266,7 +292,7 @@ process_cases <- function(data){
     cat("Importing ART for case:",caseid,"\n")
     art <- VitalDBR::load_case('SNUADC/ART', caseid)
     cat("Importing AWP for case:",caseid,"\n")
-    awp <- VitalDBR::load_case('Primus/AWP', caseid) 
+    awp <- VitalDBR::load_case('Primus/AWP', caseid)
     },
     error = function(e){
       break_and_save <<- TRUE
@@ -281,48 +307,39 @@ process_cases <- function(data){
     ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
     rm(art)
     rm(awp)
+    
+    ppv_first30[counter, 1] <- ppv_results[length(ppv_results)-1]
+    ppv_last30[counter, 1] <- ppv_results[length(ppv_results)]
+    
+    # remove first and last 30 mins avg PPV from data vector, only leave PPV's from all 2min iterations
+    ppv_results <- ppv_results[0: (length(ppv_results)-2)]
+    
     len_ppv <- length(ppv_results)
     ppv_under5[counter, 1] <- sum(ppv_results<=5)/len_ppv
     ppv_over8[counter, 1] <- sum(ppv_results>=8)/len_ppv
+    
   }
   colnames(ppv_under5) <- c('ppv_under5')
   colnames(ppv_over8) <- c('ppv_over8')
   data <- cbind(data, ppv_under5)
   data <- cbind(data, ppv_over8)
+  colnames(ppv_first30) <- c('ppv_avg_first30')
+  colnames(ppv_last30) <- c('ppv_avg_last_30')
+  data <- cbind(data, ppv_first30)
+  data <- cbind(data, ppv_last30)
   return(data)
-}
-#startTime <- Sys.time()
-# ppv_data <- process_cases(merged)
-#endTime <- Sys.time()
-#print(endTime - startTime)
-#View(ppv_data)
+} 
+
+startTime <- Sys.time()
+ppv_data <- process_cases(merged)
+endTime <- Sys.time()
+print(endTime - startTime)
+View(ppv_data)
 #})
-#path <- getwd()
-#filename = paste(path, 'df.csv',sep = '')
-#write.csv(ppv_data, filename)
+path <- getwd()
+filename = paste(path, 'df30.csv',sep = '')
+write.csv(ppv_data, filename)
 
-```
-
-```{r}
-# data.frame: Time difference of 41.54168 secs 
-# as.tibble: Time difference of 41.2858 secs
-#View(ppv_data)
-```
-
-
-```{r}
-full <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
-merged2 <- merge(x=merged,y=full,by="caseid") 
-#merged
-```
-
-```{r}
-# Fjern de her operationer
-full %>% select("preop_ecg") %>% dplyr::filter(preop_ecg != "Normal Sinus Rhythm")
-
-```
-```{r}
-full
 ```
 
 
