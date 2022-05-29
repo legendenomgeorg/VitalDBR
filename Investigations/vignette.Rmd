@@ -14,7 +14,7 @@ After that we show how to use the processed data and detected events to fit a Ge
 In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
-Hello, Jonas was here. It was nice
+Hello, Jonas was here. Georg was here
 
 
 ## The biological background
