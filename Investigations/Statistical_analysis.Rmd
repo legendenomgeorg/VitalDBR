@@ -51,13 +51,13 @@ The independent variables we choose to do this study are the following:
   
 * PPV_avg_last30
   + The average of the last 15 two minute interval measurements of PPV 
-  + Note due to anomalies in data, some of these values are 0, and we have therefore removed those     cases from our data
+  + Note due to anomalies in data, some of these values are 0, and we have therefore removed those     cases from our data.
   
 * preop_htn
   + A measurement of how healthy the patients kidneys are
 
 * preop_dm
-  + Whether the patient has too high bloodpressure
+  + Whether the patient has too high blood pressure
   
 * preop_cr
   + A measurement of how healthy the patients kidneys are
@@ -72,6 +72,7 @@ The independent variables we choose to do this study are the following:
 * dangerop
   + Indicates whether the operation is of a type deemed generally dangerous. Which are:
   + Colorectal, Hepatic, Vascular, Biliary/pancreas, stomach and Transplantation
+  + Note that this is very broad, but it is our best way atm, to get an indicator of the severity     of the operation
   
 
 ## Analysis
@@ -113,7 +114,7 @@ First of all we want to set a baseline for our future models, we do this with a 
 summary(linear_model <-lm(icu_days ~ . , data=data))
 ```
 
-We will refrain from interpret coefficients, before we have decided on the best model. So to determine whether our model violates its assumptions. For the linear regression we do a classic plot of the residuals against the dependent variable and a qqplot
+We will refrain from interpreting coefficients, before we have decided on the best model. So to determine whether our linear regression model violates its assumptions, we do a classic plot of the residuals against the dependent variable and a qqplot.
 
 ```{r}
 residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0) +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot")
@@ -212,7 +213,7 @@ $$Y \sim NB(r,p) $$
 where r is the number of failures until the experiment is stopped and p is the probability of success. This is the normal formulation of the distribution, but the distribution can also be formulated as a poisson distribution with an added Gamma noise variable $r$ which has mean 1 and a scale parameter $v$.
 This means that we can formulate the Negative Binomial distribution in terms of it's mean and a dispersement variable $r$
 $$Y \sim NB(\mu, \alpha)  = \frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+\mu}\right)^{r}\left(\frac{\mu}{r+\mu}\right)^{k} $$
-This in itself is not that useful, but now the distribution is defined from it's mean, and because the GLM models the mean of a regression this allows us to use the negative binomial distribution as our family.
+This in itself is not that interesting, but now the distribution is defined from it's mean, and because the GLM models the mean of a regression this allows us to use the negative binomial distribution as our family.
 
 The mean and variance of this formulation can then be written as:
 $$E[Y] = m $$
@@ -238,12 +239,11 @@ But what if our problem is not overdispersement, but actually zero inflation? Me
 
 Looking at the zero-inflated Poisson distribution, we can see that this model is comprised of two different processes. The first of which generates zeros:
 $$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
-Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logistic regression, as it predicts a "probability" between 0 and 1 of observing 0. 
+Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logit regression, as it predicts a "probability" between 0 and 1 of observing 0. 
 
 The second is a poisson distribution 
 $$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
 Where $ \pi$ is the probability of of extra zeros
-
 
 These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "zeroinfl" package. 
 There are various formulations we can use, depending on how we believe the variables influence each part of the model. For example we can write the formula as:
@@ -306,7 +306,8 @@ Where $\perp$ means independence between two random variables.
 
 In our case, this formula can be interpreted with an example. Let's say we are looking at the influence of our independent variables on patients spending 29 days in the ICU ($Y=29$). Then this is comprised of two different stochastic variables. T which determines the number (count) of patients who spend 29 days in the ICU. In our case, the number of patients is given by the poisson distribution. 
 And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution.
-To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T.
+
+To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T (keeping T fixed and evaluating X).
 ```{r}
 icu_barplot + ggtitle("Compound Poisson Distribution") + xlab("X ~ Gamma(alpha, beta)") + ylab("T ~ poisson(lambda)")
 ```
@@ -412,9 +413,8 @@ length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +
 In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liqied given to the patient during the operation. 
 
 ## Discussion of confounders
-If we had access to the specific type of surgery, and a doctor that could determine whether they were dangerous or not, we could more accurately account for the confounder bias in our regression. Perhaps even divide into more levels of how likely that operation is to send you to the icu. This would in turn require more data, since we are balancing just around the point where we can't add any more variables to our zero inflated regressions, due to the size of the model. 
-
-
+Probably our biggests confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. 
+We actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
 
 ## Conclusion
 In conclusion we see no correlation between PPV and days in the ICU. 
