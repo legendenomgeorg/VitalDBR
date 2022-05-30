@@ -531,10 +531,10 @@ residualplot + qqplot
 
 
 
-On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity***, since the variance seems to be dependent on days in ICU. 
-We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This does not invalidate our regression coefficients, but prevents us from using tests like ANOVA, that assume normal errors. ***
+On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity, since the variance seems to be dependent on days in ICU. 
+We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This is a problem since normal errors give us normally distributed coefficient estimates $\beta$, and our p-values and confidence intervals rely on that. This means that the p-values and coefficients are invalid.
 
-As our data breaks various assumptions, we will not consider the linear regression in our future comparissons, as it is not a valid model.
+As our data breaks various assumptions, we will not consider the linear regression in our future comparisons, as it is not a valid model.
 
 Let's inspect our dependent variable then.  
 ```{r}
@@ -828,9 +828,6 @@ Probably our biggest confounder is the operation type. We have tried to account 
 
 
 
-We actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
-
-
 **-------> Er der flere confounders?** 
 
 
@@ -850,8 +847,7 @@ We also see that kidney health is important. The kidneys decide how much blood i
 (Why is the liver important?)
 *-----> Hvorfor er leveren vigtig*
 
-ASA score, which is a measurment of whether the patient is healthy enough to be operated, is also significant, which is not suprising. 
-
+ASA score, which is a measurement of whether the patient is healthy enough to be operated, is also significant, which is not suprising. 
 
 Now we look at the zero-inflation part of the regression:
 ```{r}
@@ -866,6 +862,9 @@ The above significant variables are not really that surprising, except for knife
 
 ## Future work:
 Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital. If we had access to more data, that would be very interesting to investigate.
+
+To combat the operation type confounder bias, we actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
+
 Perhaps it is possible to create a more advanced GAM, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. 
 
 **------> Har i flere idéer til det her?**
