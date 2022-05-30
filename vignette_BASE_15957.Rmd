@@ -1,0 +1,894 @@
+---
+title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patients ICU stay"
+author: 
+  - "Jonas Arentoft, Frederik Pedersen & Georg Svendsen"
+  - "Data Project 2022, Aarhus University"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+    math: katex
+---
+
+# Introduction / Motivation
+This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
+First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
+After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8$. 
+When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
+
+## The biological background
+
+(skal udfyldes)
+
+
+# Fitting a gam
+## Preparing everything
+Before we get started, we need a couple of packages. 
+```{r,message=FALSE}
+# This is how you install VitalDBR!
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+library(comprehenr)
+library(kableExtra)
+library(knitr)
+```
+
+
+```{r, message=FALSE}
+library(waveformtools) # This is a package made by our advisor PhD. student Johannes
+library("tidyverse")
+library(mgcv) # The standard R package to use GAM's
+library(patchwork) #package used for plotting
+```
+
+Then we need to load some data. For that we have created the function "load_case", which takes in a monitoring machine, the track of interest and finally the caseid. 
+```{r}
+data_art <- VitalDBR::load_case('SNUADC/ART', 1)
+data_awp <- VitalDBR::load_case('Primus/AWP', 1)
+```
+
+In this case we load the tracks ART (Arterial Blood Pressure) and AWP (Airway Pressure) for patient 1. ART is measured by the "SNUADC" machine and AWP is measured by the "Primus" machine.
+Under the hood this function finds all tracks with the inputted caseid and then stiches together the right API call such that we get the the right data. The format of the data also makes it easy to convert to a timeseries format as the frequency is saved in the first row of the first column, like this:
+
+```{r}
+tsp(ts(data_art[,2], frequency = 1/data_art[1,1])) # Output is first value, last value and frequency
+```
+But we will continue working in the data.frame format for this vignette.
+
+To make sure that we work with the same data through out the entire vignette, we start out by defining an interval we want to work on
+```{r}
+start = 10000 # Interval starts at 10000 seconds
+sec = 30 # Last 30 seconds from 10000. Such that the interval is now 10000 sec to 10030 sec
+```
+
+
+## Finding the inspiration of AWP
+
+Now we introduce our function: "subset_data". This function helps with choosing an interval of a timeseries defined by frequency. It automatically sets converts frequency to seconds and subsets the data. The reason the time variable is not converted to the row index, is that it makes it difficult to work with. 
+```{r}
+sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
+```
+
+
+```{r echo=FALSE}
+knitr::kable(head(sub_awp))
+```
+
+We now have the right subset of our AWP data, and we can simply plot it like so:
+```{r,fig.width = 16}
+plot_awp(awp_data = sub_awp)
+```
+
+Now, as stated in the introduction, we are interested in finding the inspiration of the airway pressure, which is the beginning of a breath. For that we have created the function "get_inspiration_start". By default, it works by applying a convolution filter of the form (-1,-1,-1,-1,-1,-1,-1,-1,0,1,1,1,1,1,1,1,1) (note: stats::filter takes the convolution filter in reverse, so we input the reverse of this). This creates a waveform which peaks at sudden large changes in amplitude. This means that we can use a standard peak-finding algorithm on the convolution, to find the inspirations.
+
+```{r}
+insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+```
+
+
+The function returns the times of the peaks in a dataframe
+And we can then plot the inspirations on the AWP signal:
+```{r,fig.width = 16}
+plot_awp(awp_data = sub_awp, add_insp_start = 'yes', insp_start_data = insp_start)
+```
+
+## Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
+To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
+
+```{r}
+sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
+```
+
+```{r echo=FALSE}
+knitr::kable(head(sub_art))
+```
+
+```{r}
+dygraph_signal(sub_art, 2, 3)
+```
+
+Now that the data is prepared we use a function created by our advisor Johannes, thats finds the value and position of the peaks. It also finds the pulse pressure, which is just the difference between the systolic and diastolic blood pressure: $ PP = SBP - DBP $
+```{r warning=FALSE}
+beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,] # we skip the first observation
+```
+
+
+```{r echo=FALSE}
+knitr::kable(head(beats)) %>% scroll_box(width = "100%")
+```
+
+Now we plot the Arterial blood pressure, together with the peaks and the inspiration:
+```{r fig.width = 16, fig.align="center"}
+plot_art(sub_art, insp_start, beats)
+```
+Beautiful, right? 
+
+We can also plot the pulse pressure with the inspiration. NOTE: As the pulse pressure is a discrete measurement, this is plotted with a linear line interpolation.
+```{r fig.width = 16, fig.align="center"}
+pp_plot(insp_start, beats)
+```
+
+But we want to know which inspiration every pulse pressure measurement belongs to, and we want to know the position of the pulse pressure measurement relative to the inspiration. To do this we use a function created by our advisor Johannes, that adds "ann_n" which says which inspiration a measurement belongs to. And "ann_rel_index" which gives the position relative to the inspiration (ie. it goes from 0 to 1 between each inspiration)
+```{r}
+beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
+```
+
+```{r echo=FALSE}
+knitr::kable(head(beats_indexed)) %>% scroll_box(width = "100%")
+```
+
+
+This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
+
+```{r fig.width = 16, fig.align="center"}
+pp_plot_color(beats_indexed, insp_start)
+```
+
+
+
+```{r fig.width = 13, fig.align="center"}
+pp_plot_color_and_index(beats_indexed, insp_start)
+```
+
+
+## Fitting the GAM
+(denne del skal udvides meget)
+
+We can generally write the GAM structure as:
+$$g(E(Y))=α+s_1(x_1)+⋯+s_p(x_p)$$
+In our case this would translate to:
+$$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
+
+
+
+## Why do we use a GAMs for modelling PPV?
+There exists other ways to calculate the PPV of the pulse pressure. They are often based on simpler methods from signal processing /time series analysis, where you calculate min, max and a time trend. They actually perform very well and are widely used for various purposes.
+The reason we use GAMs are first of all, that this is research and not industry. It has still not been definitely proved that GAM modelling of pulse pressure variation is more accurate than the normal methods, but our advisor Johannes' coming phd thesis seems to suggest it.
+Using a GAM we also get more insights and interpretability. It is possible to model uncertainty and confidence bounds, although we have not done that in this vignette, as it is not really relevant to what we are trying to answer. 
+
+**------> Er de her årsager rigtige? Er der flere?**
+
+
+```{r}
+PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
+
+PP_gam <- gam(
+PP ~ 
+s(ann_rel_index,k =10,bs = "cc" ) +
+s(time,bs = "cr" ), knots = list(ann_rel_index = c(0,1)),
+method = "REML", data = PP_data)
+
+gratia::draw(PP_gam,
+residuals = TRUE)
+```
+
+
+```{r}
+alpha <- coef(PP_gam)[1] # intercept
+alpha
+```
+
+
+
+
+
+Time to calculate PPV
+```{r}
+calc_PPV <- function(smooth, intercept) {
+min_PP <- min(smooth)
+max_PP <- max(smooth)
+(max_PP - min_PP) / unname(intercept)
+}
+splines <- predict(PP_gam, type = "terms")
+PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
+PPV
+```
+
+# Does PPV influence the number of days a patient spend in the ICU
+This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU.
+
+## Creating the dataset
+To create the data set we need to calculate the PPV for every other minute of every operation... That is a lot of calculation! Therefore we have added the final dataset to the repo as "df.csv" such that you do not have to spend sleepless nights hoping that R doesn't crash during it's 1147th iteration.
+But before we can calculate the PPV we need to restrict our dataset to the following criteria:
+- The surgery approach should be "open"
+- The department should be "General surgery"
+- The type of anesthesia should be "General"
+(These restrictions were decided by our advisers)
+We also add the end and start time of the operation, as we need that later
+```{r}
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases") %>%
+      dplyr::filter(approach=="Open",
+                department=="General surgery",
+                ane_type=="General") %>%
+      dplyr::select(caseid, opstart, opend)
+knitr::kable(head(cases))
+```
+
+As we know from the first part of this vignette, we need both the Arterial Blood Pressure (ART) and the Airway Pressure (AWP) to calculate the GAM. Therefore we also restrict our data to cases which have both sensors like so:
+```{r}
+tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
+    dplyr::filter(tname == "Primus/AWP" | tname == "SNUADC/ART") %>%
+    count(caseid) %>%
+    dplyr::filter(n == 2)
+
+knitr::kable(head(tracks))
+```
+
+We then join those two datasets together by their case id, which results in the final dataset:
+```{r}
+merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
+
+knitr::kable(head(merged))
+```
+
+And now for the part where we combine everything we have done so far to create the dataset we need to be able to do statistical analysis on the effects of the PPV on patients. 
+
+
+
+### Calculating PPV
+The algorithm below, gets a dataset where it extracts the current caseid. Then it proceeds to load the ART and AWP timeseries belonging to those caseids. Then for each 2 minute intervals it calculates the inspiration, the systolic and diastolic peaks. From those it models a GAM like above and from that GAM it calculates the Pulse Pressure Variation. The PPV is then added to a list, which contains all the PPV measurements from that case. This means that it if the operation is 60 minutes, it creates a 30 long list of PPV measurements, from which it calculates the following variabels:
+
+* PPV_under5
+  + This is a number between 0 and 1, indicating what proportion of the measurements are under 5. 
+
+* PPV_over8
+  + This is a number between 0 and 1, indicating what proportion of the measurements are over 8 
+  
+* PPV_avg_first_30
+  + This is the average of the first 15 measurements
+  + We measure this to get an indication of the patients PPV pre-operation, as this is not a measure we have
+  
+* PPV_avg_last_30
+  + This is the average of the last 15 measurements
+  + We use this to see whether it matters to for example have a lowered PPV as a result of the operation
+  
+These variables are then used later in the statistical analysis to determine whether they influence the outcome. 
+This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements, mean that we can't include ALL of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. The interval stems from domain knowledge, and we constrain it between 0 and 1 as the proportion is more relevant than the amount of measurements below or above.
+
+Also 
+
+Here is the algorithm:
+```{r}
+calc_PPV <- function(smooth, intercept) {
+min_PP <- min(smooth)
+max_PP <- max(smooth)
+(max_PP - min_PP) / unname(intercept)
+}
+
+ppv_prepare <- function(case, start, end, data_art, data_awp){
+  # det tager usandsynligt lang tid, så vi skal have fixet den load funktion....
+  # men ellers er det bare at implemetere PPV udregningen her
+  op <- end - start
+  interval <- 120
+  iterations <- floor(op/interval)
+  
+  first30_avg <- 0
+  last30_avg <- 0
+  
+  data <- c(matrix(NA, nrow=iterations+2))
+  skip_to_next <- FALSE
+  
+  for (i in 0:iterations){
+        try_catch <- tryCatch(
+    {
+    sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = interval, start_sec = start+(interval*i))
+    insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+    sub_art <- VitalDBR::subset_data(data = data_art, seconds = interval, start_sec = start+(interval*i), filter=TRUE, cut_freq = 25)
+    beats <- find_abp_beats(sub_art, abp_col=3, time_col=1)
+    beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
+    rm(beats)
+    PP_data <- beats_indexed[,c("PP","time","ann_rel_index")]
+    PP_gam <- gam(
+    PP ~ 
+    s(ann_rel_index,k = 10, bs = "cc" ) + s(time, k = 10, bs = "cr"), # splines
+    knots = list(ann_rel_index = c(0,1)), method = "REML", data = PP_data )
+    splines <- predict(PP_gam, type = "terms")
+    PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])*100
+    data[i] <- PPV
+    
+    if (i <= 15){
+      first30_avg <- first30_avg + PPV
+    }
+    if (i > (iterations-15)){
+      last30_avg <- last30_avg + PPV
+    }
+    
+    cat("Iteration",i, "out of ", iterations,". For case:",case,"\n")
+    rm(PP_data)
+    },
+    error = function(e){
+      skip_to_next <<- TRUE
+    }
+    )
+    if(skip_to_next) { 
+      data[i] <- NA
+      next 
+      } 
+  }
+  first30_avg <- first30_avg / 15
+  last30_avg <- last30_avg / 15
+  data[iterations+1] <- first30_avg
+  data[iterations+2] <- last30_avg
+  
+  return(data)
+}
+
+process_cases <- function(data){
+  ppv_under5 <- data.frame(matrix(NA, nrow = nrow(data)))
+  ppv_over8 <- data.frame(matrix(NA, nrow = nrow(data)))
+  
+  ppv_first30 <- data.frame(matrix(NA, nrow = nrow(data)))
+  ppv_last30 <- data.frame(matrix(NA, nrow = nrow(data)))
+  
+  counter <- 0 
+  break_and_save <- FALSE
+  for (caseid in data$caseid){
+    counter <- counter + 1 
+    closeAllConnections()
+            try_catch <- tryCatch(
+    {
+    cat("Importing ART for case:",caseid,"\n")
+    art <- VitalDBR::load_case('SNUADC/ART', caseid)
+    cat("Importing AWP for case:",caseid,"\n")
+    awp <- VitalDBR::load_case('Primus/AWP', caseid)
+    },
+    error = function(e){
+      break_and_save <<- TRUE
+      })
+            
+    if(break_and_save) {
+      cat("Something went wrong when loading case:", caseid,"Saving results so far", "\n" )
+      break 
+      } 
+    start <- data$opstart[data$caseid==caseid] # This line and below could be optimized
+    end <- data$opend[data$caseid==caseid] # - II -
+    ppv_results <- na.omit(ppv_prepare(caseid, start, end, art,awp))
+    rm(art)
+    rm(awp)
+    
+    ppv_first30[counter, 1] <- ppv_results[length(ppv_results)-1]
+    ppv_last30[counter, 1] <- ppv_results[length(ppv_results)]
+    
+    # remove first and last 30 mins avg PPV from data vector, only leave PPV's from all 2min iterations
+    ppv_results <- ppv_results[0: (length(ppv_results)-2)]
+    
+    len_ppv <- length(ppv_results)
+    ppv_under5[counter, 1] <- sum(ppv_results<=5)/len_ppv
+    ppv_over8[counter, 1] <- sum(ppv_results>=8)/len_ppv
+    
+  }
+  colnames(ppv_under5) <- c('ppv_under5')
+  colnames(ppv_over8) <- c('ppv_over8')
+  data <- cbind(data, ppv_under5)
+  data <- cbind(data, ppv_over8)
+  colnames(ppv_first30) <- c('ppv_avg_first30')
+  colnames(ppv_last30) <- c('ppv_avg_last_30')
+  data <- cbind(data, ppv_first30)
+  data <- cbind(data, ppv_last30)
+  return(data)
+} 
+
+#ppv_data <- process_cases(merged)
+
+```
+
+
+Notes:
+- This is a very computationally intensive function. It took almost 16 hours to caculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
+
+- A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad that no "organic process" can have caused the quality decline.
+
+# Statistical Analysis
+
+
+```{r, message=FALSE}
+library(MASS)
+library(pscl)
+library(cplm)
+library(tweedie)
+library(broom)
+library("tidyverse")
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+library(MuMIn)
+#head(data)
+```
+
+## Motivation for statistical analysis:
+As stated in the introduction, we want to look into the importance of the Pulse Pressure Variation (PPV) on the amount of days the patient spend in the ICU (intensive care unit).
+
+The independent variables we choose to do this study are the following:
+
+* Age
+  + The age of the patient
+
+* Sex
+  + The gender of the patient
+  
+* Asa
+  + ASA score is a metric used to determine if someone is healhy enough to tolerate surgery and anasthesia
+
+* Emop
+  + A binary variable that is 1 if the operation is an emergency. 
+  
+* BMI
+  + The body mass index of the patient. Calculated as weight over heigh in meters squared: $BMI = (\frac{kg}{m^2}$
+
+* PPV_under_5
+  + Proportion of 2 minute intervals with a pulse pressure variation under 5 out of the entire operation
+  
+* PPV_over_8
+  + Proportion of 2 minute intervals with a pulse pressure variation over 8 out of the entire operation
+  
+* PPV_avg_first30
+  + The average of the first 15 two minute interval measurements of PPV 
+  
+* PPV_avg_last30
+  + The average of the last 15 two minute interval measurements of PPV 
+  + Note due to anomalies in data, some of these values are 0, and we have therefore removed those     cases from our data.
+  
+* preop_htn
+  + A measurement of how healthy the patients kidneys are
+
+* preop_dm
+  + Whether the patient has too high blood pressure
+  
+* preop_cr
+  + A measurement of how healthy the patients kidneys are
+  
+* preop_alt
+  + A measurement of how healthy the patients livers are
+
+* preop_ecg
+  + A binary indicator of whether the patient is experiencing "heart fibrillation"
+  
+* knife_time
+  + Total time of the operation, in hours
+  + Derived from the opstart and opend columns
+
+* dangerop
+  + Indicates whether the operation is of a type deemed generally dangerous. Which are:
+  + Colorectal, Hepatic, Vascular, Biliary/pancreas, stomach and Transplantation
+  + Note that this is very broad, but it is our best way atm, to get an indicator of the severity     of the operation
+  
+
+--------> Ift. variablerne her, kunne vi måske godt bruge lidt noter på hvorfor bla. creatinin var så vigtigt, og generelt de andre preop tal også. 
+
+
+## Analysis
+First we import the data created by the algorithm above, but we exclude the parameters we don't need, like index, caseid, death in hospital, anasthesia start and end. 
+```{r}
+data <- read.csv("df.csv")
+cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
+cases <- cases %>% dplyr::select('caseid','icu_days','age','sex','asa','emop','bmi',
+                                  'aneend', 'anestart', 'preop_htn', 'preop_dm', 'preop_ecg', 
+                                 'preop_pft', 'preop_cr', 'preop_alt', 'optype')
+merged <- merge(x=data,y=cases,by="caseid")
+merged$knife_time <- (merged$opend - merged$opstart) / 3600
+data <- merged %>% dplyr::select(-'X', -'aneend', -'anestart', -'opend', -'opstart') %>% filter(preop_ecg == "Normal Sinus Rhythm")
+data <- dplyr::mutate_if(data, is.character, as.factor) 
+data$sex <- ifelse(data$sex=='M', 1,0)
+data$preop_pft <- ifelse(data$preop_pft=='Normal',1, 0)
+data$knife_time <- round(data$knife_time, 2)
+data$ppv_over8 <- round(data$ppv_over8, 4)
+data$ppv_avg_first30 <- round(data$ppv_avg_first30, 4)
+data$ppv_avg_last_30 <- round(data$ppv_avg_last_30, 4)
+data$age <- as.integer(data$age)
+data$dangerop <- ifelse(data$optype %in% c("Breast", "Thyroid", "Others"),0,1)
+data <- dplyr::select(data, -"optype", -'preop_ecg',-'caseid')
+data <- data[!(data$ppv_avg_last_30==0),] 
+
+data <- na.omit(data)
+icu <- data$icu_days
+```
+
+
+```{r echo=FALSE}
+knitr::kable(head(data)) %>% scroll_box(width = "100%")
+```
+
+
+## Linear Regression
+First of all we want to set a baseline for our future models, we do this with a linear regression:
+
+```{r}
+summary(linear_model <-lm(icu_days ~ . , data=data))
+```
+
+We will refrain from interpreting coefficients, before we have decided on the best model. So to determine whether our linear regression model violates its assumptions, we do a classic plot of the residuals against the dependent variable and a qqplot.
+
+```{r}
+residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0,color= "#f8766d") +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot") +theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+
+qqplot <- ggplot(broom::augment(linear_model), aes(sample = .resid)) +
+  geom_qq() + geom_qq_line(color= "#f8766d" ) + xlab("Theoretical Quantiles") + ylab("") + ggtitle("Normal QQ-plot") + theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+#Skal kombineres man kan ikke få lov til at knitte når jeg gør det
+residualplot + qqplot
+```
+
+
+
+On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity, since the variance seems to be dependent on days in ICU. 
+We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This is a problem since normal errors give us normally distributed coefficient estimates $\beta$, and our p-values and confidence intervals rely on that. This means that the p-values and coefficients are invalid.
+
+As our data breaks various assumptions, we will not consider the linear regression in our future comparisons, as it is not a valid model.
+
+Let's inspect our dependent variable then.  
+```{r}
+count <- table(factor(icu, levels = 0:81))
+
+icu_barplot<-ggplot(data=as.data.frame(count), aes(x=as.integer(Var1), y=Freq)) +
+  geom_bar(stat="identity") +
+  ggtitle("Barplot of ICU days")+
+  xlab("Days in ICU") + ylab("# observations") +
+  theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+icu_barplot
+```
+We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
+But taking a closer look, we see that there are way too many 0-observations for it to be a simple poisson distribution. 
+```{r}
+sum(data$icu_days==0)/sum(nrow(data))
+```
+We can actually see that over 60% of our observations are 0. 
+We also see some extremely large values like 82, indicating a distribution with a heavy tail.
+These things further back the notion that linear regression is not the right choice for this data.
+Therefore we will introduce the idea of Generalized linear models, to combat these problems. 
+
+
+## GLM
+## What is a Generalized Linear Model?
+A standard linear regression is a model of the form $$Y = X\beta + \epsilon$$ where $\epsilon \sim N(0,\sigma^2)$. 
+We checked above that our regression does not live up to the requirement for $\epsilon$.
+
+
+If we calculate the expected value given X on both sides we get:
+$$ E[Y|X] = X\beta  $$
+Since $E[\epsilon | X] ) 0$.
+
+
+Generalized Linear Models, then make the crucial assumption, that the transformed conditional expectiation of y given x is a linear combination of regression variables 
+$$ g(E[Y|X]) =  X\beta  $$
+This means we can formulate the GLM as:
+$$ E[Y|X] = g^{-1}( X\beta ) $$
+When using GLM's in r, we choose the "family", which decides the link function $g()$ and the appropriate distribution of the errors. When choosing "poisson" as our family, we choose the log function which ensures that as our link function is the "log" function, that our errors are distributed with the poisson distribution.
+A standard linear regression is actually just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function! Best illustrated with the formula we know as:
+$$Y \sim N( X\beta, \sigma^2) $$
+Where the mean is $\mu$ is given by $E[Y|X] = g^{-1}( X\beta)$ where $g(x) = x$ ie. the identity function.
+
+Similarly we can write our poisson GLM in this fashion:
+When we introduce the log link function to the formula above it becomes
+$$ log(E(Y|X)) =  X\beta $$
+$$ E[Y|X] = e^{ X\beta} $$
+And when we reintroduce the poisson error term, we get our final model:
+$$ Y \sim Poisson( e^{ X\beta} )$$
+This is the model we will try now. 
+
+
+
+### Poisson GLM
+Even though we probably have too many zeros as we saw earlier, we will still try to use a simple poisson model for our regression:
+```{r}
+summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log")))
+```
+We see a lot of significant coefficients in this summary, but before we can interpret them, we need to know if our model breaks any assumptions.
+
+If we do some further investigation, we can also observe that the mean is not equal to the variance:
+```{r}
+mean(icu)
+var(icu)
+```
+This violates the properties of the poisson distribution, where $$E(X) = Var(X) = \lambda, \ \ X \sim poisson(\lambda)$$ 
+When the variance is larger than the mean, we are working with as so-called "over-dispersed" model, which further incentivises us to look into more advanced modelling. 
+
+### Overdispersement
+We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1.
+
+```{r}
+pois_reg$deviance/pois_reg$df.residual
+```
+As we can see our model is clearly overdispersed
+
+The reason why we don't want overdispersion, is that when the model is overdispersed, we underestimate standard errors of the coefficients, and when we underestimate those, we get too optimistic p-values. This fits well with the coefficient summary above, where almost all coefficients are highly significant. (https://stats.stackexchange.com/questions/459864/overdispersion-in-fitted-generalized-linear-model-with-insignificant-regression)
+
+This means that we will not regard the simple poisson regression as valid, and therefore not include it in the coming comparison between models.
+
+Instead we will now try with the negative binomial distribution.
+
+### Negative binomial GLM
+If Y is distributed with the negative binomial distribution, it can be written as:
+$$Y \sim NB(r,p) $$
+where r is the number of failures until the experiment is stopped and p is the probability of success. This is the normal formulation of the distribution, but the distribution can also be formulated as a poisson distribution with an added Gamma noise variable $r$ which has mean 1 and a scale parameter $v$.
+This means that we can formulate the Negative Binomial distribution in terms of it's mean and a dispersement variable $r$
+$$Y \sim NB(\mu, \alpha)  = \frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+\mu}\right)^{r}\left(\frac{\mu}{r+\mu}\right)^{k} $$
+This in itself is not that interesting, but now the distribution is defined from it's mean, and because the GLM models the mean of a regression this allows us to use the negative binomial distribution as our family.
+
+The mean and variance of this formulation can then be written as:
+$$E[Y] = m $$
+$$Var[Y] = m+\frac{m^2}{r} $$
+Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. Note that as this dispersion parameter gets larger and larger, the variance converges to the same value as the mean, and then the negative binomial distribution magically turns into the poisson distribution. This means that we now have a distribution that is similar to the poisson, but we can vary the variance, this is perfect since we can account for overdispersion by changing $r$. And the GLM-function will estimate the best $r$ itself
+
+Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula for the regression mean becomes:
+$$Y \sim NB(e^{ X\beta}, r)  $$
+Running the regression in R gives us the following result:
+```{r}
+nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
+summary(nbin_reg)
+```
+
+As this model does not break any assumptions, we will use this as our baseline for future models, but we will wait with the interpretation until the end.
+
+
+But what if our problem is not overdispersement, but actually zero inflation? Meaning that the difference between mean and variance in our data is actually caused by the high amount of 0's, and that if we account for those, the poisson model might not be overdispersed at all.
+
+## Zero Inflated models
+
+### Zero Inflated Poisson
+
+Looking at the zero-inflated Poisson distribution, we can see that this model is comprised of two different processes. The first of which generates zeros:
+$$\operatorname{Pr}(Y=0)=\pi+(1-\pi) e^{-\lambda}$$
+Which is a binomial GLM, that predicts the odds of seeing an event given a vector of regression variables. Essentially a logit regression, as it predicts a "probability" between 0 and 1 of observing 0. 
+
+The second is a poisson distribution 
+$$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
+Where $ \pi $ is the probability of of extra zeros
+
+These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "zeroinfl" package. 
+There are various formulations we can use, depending on how we believe the variables influence each part of the model. For example we can write the formula as:
+
+```{r}
+pscl::zeroinfl(icu_days ~ . , data=data, dist="poisson")
+```
+
+If we believe that all the variables both influence the zero inflation AND the poisson distribution
+
+Or we can do:
+```{r}
+pscl::zeroinfl(icu_days ~ .| 1 , data=data, dist="poisson")
+```
+if we believe that the variables have no effect on the zero inflation. ie. there are a part of the zero observations that are just inherently there or decided by a variable we do not have access to.
+
+But we will use this model:
+
+```{r}
+summary(zi_pois_reg <-pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv_avg_last_30 , data=data, dist="poisson"))
+```
+As we think that only a specific set of variables influences the zero inflation.
+In this case we first of all believe that emergency operations influence whether people are designated to spent 0 days in the ICU. The reason is that an operation being an emergency, will probably have an influence on whether the patient spent 0 days in the ICU. With a simple tally, we can see that people undergoing non emergency operations generally spend 0 days in the ICU, and people undergoing emergency operations genereally spend more than 0 days in the icu
+
+```{r}
+# Number of non-emergency patients who spend 0 days in the icu, divided by number of non emergency patients
+data %>% filter(emop==0, icu_days==0) %>% nrow() / data %>% filter(emop==0) %>% nrow()
+# Number of emergency patients who spend 0 days in the icu, divided by number of emergency patients
+data %>% filter(emop==1, icu_days==0) %>% nrow() / data %>% filter(emop==1) %>% nrow()
+```
+We also add "dangerop" with the same argumentation, although the numbers are not as obvious, we still assume that there could be a connection.
+```{r}
+# Number of non-dangerpatients who spend 0 days in the icu, divided by number of non-danger patients
+data %>% filter(dangerop==0, icu_days==0) %>% nrow() / data %>% filter(dangerop==0) %>% nrow()
+# Number of danger patients who spend 0 days in the icu, divided by number of danger patients
+data %>% filter(dangerop==1, icu_days==0) %>% nrow() / data %>% filter(dangerop==1) %>% nrow()
+```
+
+
+Second of all we add all variables that indicate something about the condition of the patient before the operation. Note we include PPV_avg_first30, as an indication of the patients pulse pressure before the operation.
+
+
+### Zero inflated negative binomial
+But actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations? This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned eralier.
+```{r}
+zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv_avg_last_30, data=data, dist="negbin")
+summary(zi_nbin_reg)
+```
+
+Now we have tried normal GLM and zeroinflated GLM, but before we compare the models and interpret the results, we will lastly explore the "Compound Poisson Regression.
+
+## Compound poisson regression
+The compound poisson regression is an even more advanced way of modelling our data. This distribution is useful in situations with a very large proportion of zero observations. It is commonly used in rainfall modelling , where there are many more days per year without rain than days with rain (Probably not that useful in Denmark...). It is also often used in actuarial math, especially when modelling premiums, as most people in a given year do not get any payments from their insurance, but a few people get a lot of money paid out. 
+
+Our compound distribution, often referred to as the "Compound Poisson-Gamma distribution" is defined as: 
+$$  Y = \sum_i^T X_i$$
+Where
+$$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \beta), \ \ T \perp X_{i}$$
+Where $\perp$ means independence between two random variables.
+
+In our case, this formula can be interpreted with an example. Let's say we are looking at the influence of our independent variables on patients spending 29 days in the ICU ($Y=29$). Then this is comprised of two different stochastic variables. T which determines the number (count) of patients who spend 29 days in the ICU. In our case, the number of patients is given by the poisson distribution. 
+And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution.
+
+To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T (keeping T fixed and evaluating X).
+```{r}
+library(latex2exp)
+icu_barplot + ggtitle("Compound Poisson Distribution") + xlab(TeX("X ~ Gamma($alpha, beta$)")) + ylab(TeX("T ~ poisson($lambda$)"))
+```
+
+To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is not clearly defined. 
+
+This means that we can model our dependent variable as:
+$$ Y \sim CPois(\mu_i, \phi, \rho)$$
+Where the parameters are defined as so:
+
+- $\mu = E(Y)$ is the mean.
+
+- $\phi$  is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
+
+- $\rho$ is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated here: https://en.wikipedia.org/wiki/Tweedie_distribution under "related distributions", the index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
+
+In this form the expected value and variance is given by:
+$$E[Y] = \mu $$
+$$ Var[Y] = \phi \cdot \mu^\rho $$
+As seen previously, we can link the mean to the linear predictors through the log function. And we can finally write it in the same fashion as the two previous GLMs
+$$ Y \sim CPois(e^{X\beta}, \phi, \rho)$$
+
+We can finally do this compound poisson regression using the library "cplm" 
+```{r}
+c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
+summary(c_pois_reg)
+```
+
+(Indsæt analyse af coefficienter)
+
+## Comparing all models
+
+### Comparing models through metrics:
+We will compare our models with the metrics AICc and BIC. We look for the model with the lowest of these values.
+
+#### AIC
+AIC is defined as:
+$$AIC =  2k - 2log(LL) $$
+Where k is the amount of parameters in our model and LL is the log-likelihood estimate.
+We can break AIC into two parts. First, when the $2k$ part penalizes when we add more parameters to our model ie. it penalizes complexity and $-2log(LL)$ decreases as our model gets better at explaining our data, this rewards us for building models that fit our data well.
+
+In this analysis we are using AICc which is a different formulation that corrects for small samples. As the number of sample goes to infinity, AICc converges to AIC, so there is no reason not to use AIC, especially since we do not have extremely many samples.
+
+#### BIC 
+BIC is the Bayesian information criteria, and its formula is pretty similar to AIC's:
+$$BIC = klog(n)-2log(LL) $$
+The concept is the same, but our model is not only penalized by the amount of parameters in the model, $k$, but also by the amount of data in our model $n$. 
+
+
+### Calculating metrics
+Calculating AICc and BIC for the Compound poisson regression has to be done manually:
+```{r}
+# Calculating BIC for compound poisson glm
+logLik_tweedie <-
+  function(cpglm_obj) {
+    # compute the density with the optimal parameters and the model coefficients
+    dens <- tweedie::dtweedie(y = cpglm_obj$y, 
+                              mu = cpglm_obj$fitted.values, 
+                              xi = cpglm_obj$p, 
+                              phi = cpglm_obj$phi)
+    # we add 2 to the number of parameters, since the dispersion was estimated and the index parameter was optimized
+    k = length(cpglm_obj$coefficients) + 2
+    return(c(sum(log(dens)),k))
+  }
+
+logliks <- logLik_tweedie(c_pois_reg)
+N <- nrow(data)
+k = logLik_tweedie(c_pois_reg)[2] # number of parameters in model
+BIC_c_pois_reg <- -2*logliks+log(N)*k
+
+# also calculating AICc
+AICc_c_pois_reg <- c_pois_reg$aic + (2*k^2+2*k)/(N-k-1)
+
+```
+
+Creating a table of the metrics:
+```{r}
+models <- list(nbin_reg, zi_pois_reg,zi_nbin_reg,c_pois_reg)
+model_names <- list('nbin_reg','zi_pois_reg','zi_nbin_reg','c_pois_reg')
+metrics <- list("AICc","BIC")
+
+aicc_models <- sapply(models[-c(4)], AICc)
+aicc_models[4] <- AICc_c_pois_reg
+bic_models <- sapply(models[-c(4)], stats::BIC)
+bic_models[4] <- BIC_c_pois_reg  
+
+model_metrics <- data.frame(matrix(ncol=length(model_names), nrow = length(metrics)))
+colnames(model_metrics) <- model_names
+rownames(model_metrics) <- metrics
+model_metrics[1,] <- aicc_models
+model_metrics[2,] <- bic_models
+
+model_metrics
+```
+
+Looking at the table, we see that generally negative binomial models result in better models. Depending on your objective you might choose either. The standard negative binomial regression scores lower, but it also has almost half the amount of parameters:
+```{r}
+# plus one for the dispersion parameter
+length(nbin_reg$coefficients)+1
+length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +1
+
+```
+In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liqied given to the patient during the operation. 
+
+## Discussion of confounders
+Probably our biggest confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. 
+
+
+
+**-------> Er der flere confounders?** 
+
+
+## Conclusion
+In conclusion we see no relationship between PPV and days in the ICU. This is either due to the confounders mentioned above, or simply because there is no relationship between the two. 
+
+But we have gotten other interesting information. Let's look at the highly significant coefficients of the zero inflated binomial distribution again, but transformed back out of log scale. First we look at the negative binomial part of the regression:
+
+```{r}
+countcoef <- coef(summary(zi_nbin_reg))$count
+exp(countcoef[countcoef[, 4] < 0.01, 1])
+
+```
+Emergency operations seem to be a very important variable, and we can see that it has a rate ratio og over 2. Meaning that an emergency stay doubles the amount of days spent in the ICU. 
+We also see that kidney health is important. The kidneys decide how much blood is flowing in our veins, by regulating the body's fluio responsiveness. As stated in the biological introduction in the start, we are looking at fluid responsiveness, and a bad function kidney will of course influence the operation outcome. 
+
+(Why is the liver important?)
+*-----> Hvorfor er leveren vigtig*
+
+ASA score, which is a measurement of whether the patient is healthy enough to be operated, is also significant, which is not suprising. 
+
+Now we look at the zero-inflation part of the regression:
+```{r}
+zerocoef <- coef(summary(zi_nbin_reg))$zero
+exp(zerocoef[zerocoef[, 4] < 0.01, 1])
+```
+We see that ASA, emop, kidney health and the length of the operation influence whether the patient stays 0 or more days. Most of these  make sense with the same argumentation as above. Knife_time is a bit more finnicky tho. One interpretation is that knife_time is actually a better measurement of the danger of an operation than "dangerop" is, since long operations generally are more dangerous. 
+
+
+
+The above significant variables are not really that surprising, except for knife_time influencing the zero inflation of the regression, as that is a measurement which is first known after the operation. 
+
+## Future work:
+Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital. If we had access to more data, that would be very interesting to investigate.
+
+To combat the operation type confounder bias, we actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
+
+Perhaps it is possible to create a more advanced GAM, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. 
+
+**------> Har i flere idéer til det her?**
+
+
+# Alle links jeg har brugt mere eller mindre
+(gode diagnostics til count data)
+ - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
+
+- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
+- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
+- https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
+- https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
+
+
+https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
+
+https://en.wikipedia.org/wiki/Zero-inflated_model
+https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
+
+
+https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
+https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
+
+
+
+
