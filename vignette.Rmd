@@ -205,9 +205,9 @@ Time to calculate PPV
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
 max_PP <- max(smooth)
-(max_PP - min_PP) / unname(intercept)
+return((max_PP - min_PP) / unname(intercept))
 }
-splines <- predict(PP_gam, type = "terms")
+splines <- predict(PP_gam, type = "terms") # since no data is provided, it automatically uses the original data.
 PPV <- calc_PPV(splines[,1], intercept = coef(PP_gam)[1])
 PPV*100
 ```
@@ -284,7 +284,7 @@ Here is the algorithm:
 calc_PPV <- function(smooth, intercept) {
 min_PP <- min(smooth)
 max_PP <- max(smooth)
-(max_PP - min_PP) / unname(intercept)
+return((max_PP - min_PP) / unname(intercept))
 }
 
 ppv_prepare <- function(case, start, end, data_art, data_awp){
@@ -856,7 +856,7 @@ exp(countcoef[countcoef[, 4] < 0.01, 1])
 ```
 Emergency operations seem to be a very important variable, and we can see that it has a rate ratio og over 2. Meaning that an emergency stay doubles the amount of days spent in the ICU. 
 
-We also see that kidney health is important. A higher amount of creatinine decreases days in the ICU. The kidneys decide how much blood is flowing in our veins, by regulating the body's fluio responsiveness. As stated in the biological introduction in the start, we are looking at fluid responsiveness, and a bad function kidney will of course influence the operation outcome. 
+We also see that kidney health is important. A higher amount of creatinine decreases days in the ICU. The kidneys decide how much blood is flowing in our veins, by regulating the body's fluid responsiveness. As stated in the biological introduction in the start, we are looking at fluid responsiveness, and a bad functioning kidney will of course influence the operation outcome. 
 
 (Why is the liver important?)
 *-----> Hvorfor er leveren vigtig*
@@ -881,34 +881,12 @@ Our original research question was whether PPV influenced in hospital mortality,
 
 To combat the operation type confounder bias, we actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have a doctor go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the likelihood of an ICU stay. But this was not possible for us to do. 
 
-Perhaps it is possible to create a more advanced GAM, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. 
+Perhaps it is possible to create a more advanced GAM, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. Though this would break the "additive" part of the model, so a GAM is perhaps not the right choice for this.
 
-We would also like to optimize the find_abp_beats function
+We would also like to optimize the find_abp_beats function if possible, such that we can build the dataset more efficiently.
 
 **------> Har i flere idéer til det her?**
 
-
-
-
-
-# Alle links jeg har brugt mere eller mindre
-(gode diagnostics til count data)
- - https://stats.stackexchange.com/questions/70558/diagnostic-plots-for-count-regression
-
-- https://stats.oarc.ucla.edu/r/dae/poisson-regression/
-- https://stats.stackexchange.com/questions/108995/interpreting-residual-and-null-deviance-in-glm-r
-- https://www.datascienceblog.net/post/machine-learning/interpreting_generalized_linear_models/
-- https://www.dataquest.io/blog/tutorial-poisson-regression-in-r/
-
-
-https://stats.stackexchange.com/questions/469035/zero-inflated-model-in-r-building-the-model-with-pscl-not-understanding-use-of
-
-https://en.wikipedia.org/wiki/Zero-inflated_model
-https://stats.stackexchange.com/questions/368913/zero-inflated-count-data-simulation-in-r)
-
-
-https://www.r-bloggers.com/2014/10/a-note-on-tweedie/
-https://cran.r-project.org/web/packages/cplm/vignettes/cplm.pdf
 
 
 

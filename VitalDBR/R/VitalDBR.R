@@ -1,13 +1,12 @@
 #' Loads file from URL (helper function)
 #' @export
-#' @param file_url URL for API endpoint
+#' @param file_url URL for API endpoint. Found at https://vitaldb.net/dataset/?query=api&documentId=1_VTteoI5v-cdFkUTSnhYoGCqyq8dAC-_k50oM1QOjkU&sectionId=h.av1x1sa5y1he
 #' @return A dataframe with values from the specified endpoint
 #' @example
 #' load_VDB("https://api.vitaldb.net/trks")
 #' load_VDB("https://api.vitaldb.net/cases")
 #' load_VDB("https://api.vitaldb.net/labs")
 #' load_VDB(https://api.vitaldb.net/{tid})
-#'
 load_VDB <- function(file_url) {
   con <- gzcon(url(file_url))
   txt <- readLines(con)
@@ -21,7 +20,7 @@ check_hz <- function(data){
   if (is.na(data[3,1])){
     freq = data[2,1]
     data <- subset (data, select = -Time)
-    data<- na.omit(data) # A bit controversial perhaps
+    data<- na.omit(data) 
     data <- cbind(data, "Time"=1:nrow(data)*freq)
     data <- data[, c(2,1)] # reorder columns'
     rownames(data) <- NULL
@@ -90,12 +89,12 @@ get_inspiration_start <- function(data, data_column=2, n=8) {
 
 #' Function for subsetting AWP and ART data
 #' @export
-#' @param data
-#' @param start_sec
-#' @param seconds
+#' @param data The data you want to subset. In dataframe format
+#' @param start_sec Which second of the data you want the subset to start at
+#' @param seconds The size of the interval, starting from "start_sec"
 #' @param filter Specify if a Butterworth Filter should be applied to the data (FALSE by default)
 #' @param cut_freq Specify cutoff frequency for the filter (25 by default)
-#' @value Returns a dataframe with a subset of AWP or ART data, with columns  Time, ART or AWP, ART or AWP filtered (If specified).
+#' @value Returns a dataframe with a subset of AWP or ART data, with columns  Time, signal and filtered signal (If specified).
 subset_data <- function(data, seconds, start_sec, filter=FALSE, cut_freq=25 ){
   hz <- 1/(data[2,1]-data[1,1])
   start <- start_sec*hz
