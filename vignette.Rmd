@@ -2,7 +2,8 @@
 title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patients ICU stay"
 author: 
   - "Jonas Arentoft, Frederik Pedersen & Georg Svendsen"
-  - "Data Project 2022, Aarhus University"
+  - "Data Project 2022"
+  - "Aarhus University"
 output:
   prettydoc::html_pretty:
     theme: architect
@@ -61,8 +62,8 @@ But we will continue working in the data.frame format for this vignette.
 
 To make sure that we work with the same data through out the first part of the vignette, we start out by defining an interval we want to work on
 ```{r}
-start = 10000 # Interval starts at 10000 seconds
-sec = 30 # Last 30 seconds from 10000. Such that the interval is now 10000 sec to 10030 sec
+start = 10000 # Interval start
+sec = 30 # Last 30 seconds from the start
 ```
 
 
@@ -142,13 +143,31 @@ pp_plot_color_and_index(beats_indexed, insp_start)
 
 
 ## Fitting the GAM
-(denne del skal udvides meget)
+
+### The theory behind Generalized Additive Models
+The reason we use GAMs is that they do not assume a linear relationship between independent and the dependent variables. In a GAM every independent variable is put through different smooth basis function. The reason it is useful for our analysis, is that we have two different shapes that we want to isolate. The first is the cyclic shape of the pulse pressure, from which we will extract the pulse pressure variation. And the other is the time trend over the entire interval. 
+
+
+
+Generalized Additive Models have two magical properties. The first is the fact that we do not need to know the shape of the predictive functions a priori, since they are defined as non-parametric splines. The underlying shipe is calculated through Splines, and utilizes regularisation to combat overfitting.
+
+A spline is a function defined piecewise by polynomials. A spline is defined from the order of polynomials you want to fit for every "piece" of the interval and where the number of pieces are defined by the amount of knots.
+
+In our case we choose cubic $x^2$ polynomials, since they are not very "wiggly" and generally result in nice smooth splines.
+
+We also choose to create the spline with 10 knots. This choice was a compromise between computability and interpretability. A low number of knots will give a bad representation of the shape, as it is not detailed enough. But a too large amount of knots will just result in redudant computing, as we are trying to fit more polynomials than actually needed to create a decent spline representation of the underlying data.
+
+
+
+The next magic property is the fact that it is an additive model. When a model is additive, the interpretation of the marginal impact of a single variable does not depend on the values of the other variables in the model. This means that we can interpret the coefficients similarly to a normal linear regression, although we do not have a use for this in this vignette. 
 
 We can generally write the GAM structure as:
 $$g(E(Y))=α+s_1(x_1)+⋯+s_p(x_p)$$
-In our case this would translate to:
+In our case this would all translate to:
 $$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
+Where $s_1$ is a cyclic cubic spline and $s_2$ is a normal cubic spline, as stated above
 
+In this project we use the GAM to find the PPV, by extracting the PPV from $s_1(Ann_rel_index)$ without the impact of the time trend $s_2(Time)$. 
 
 
 ## Why do we use a GAMs for modelling PPV?
