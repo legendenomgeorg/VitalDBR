@@ -14,7 +14,7 @@ output:
 This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
 First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
-In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8$. 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether it influences patient's time spent in the ICU. To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8 $ . 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
 ## The biological background
@@ -814,17 +814,17 @@ model_metrics[2,] <- bic_models
 model_metrics
 ```
 
-Looking at the table, we see that generally negative binomial models result in better models. Depending on your objective you might choose either. The standard negative binomial regression scores lower, but it also has almost half the amount of parameters:
+Looking at the table, we see that generally negative binomial models result in better models. Depending on your objective you might choose either. The standard negative binomial regression scores lower, but it also has way less parameters:
 ```{r}
 # plus one for the dispersion parameter
 length(nbin_reg$coefficients)+1
 length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +1
 
 ```
-In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liqied given to the patient during the operation. 
+In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liquid given to the patient during the operation. 
 
 ## Discussion of confounders
-Probably our biggest confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. 
+Probably our biggest confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. We propose a solution in the "Future Work" section below
 
 
 
