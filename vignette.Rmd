@@ -2,7 +2,8 @@
 title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patients ICU stay"
 author: 
   - "Jonas Arentoft, Frederik Pedersen & Georg Svendsen"
-  - "Data Project 2022, Aarhus University"
+  - "Data Project 2022"
+  - "Aarhus University"
 output:
   prettydoc::html_pretty:
     theme: architect
@@ -14,7 +15,7 @@ output:
 This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
 First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
-In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether it influences patient's time spent in the ICU. To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8 $ . 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether it influences patient's time spent in the ICU. To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $5 \leq PPV \leq 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare the suited models using various metrics.
 
 ## The biological background
@@ -34,14 +35,10 @@ library(VitalDBR)
 library(comprehenr)
 library(kableExtra)
 library(knitr)
-```
-
-
-```{r, message=FALSE}
 library(waveformtools) # This is a package made by our advisor PhD. student Johannes
 library("tidyverse")
 library(mgcv) # The standard R package to use GAM's
-library(patchwork) #package used for plotting
+library(patchwork) # Package used for plotting
 ```
 
 
@@ -74,9 +71,9 @@ sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = sta
 knitr::kable(head(sub_awp))
 ```
 
-We now have the right subset of our AWP data, and we can simply plot it like so:
+We now have the right subset of our AWP data. We have made a function, plot_awp, for beautifully plotting the AWP data where time in seconds is on the x-axis, and the AWP value in hPa is on the y-axis. The function can  also take in the values 'add_insp_start' and 'insp_start_data' which can be used to plot the AWP data in combination with the inspiration starts.
 ```{r,fig.width = 16}
-plot_awp(awp_data = sub_awp)
+VitalDBR::plot_awp(awp_data = sub_awp)
 ```
 
 Now, as stated in the introduction, we are interested in finding the inspiration of the airway pressure, which is the beginning of a breath. For that we have created the function "get_inspiration_start". By default, it works by applying a convolution filter of the form (-1,-1,-1,-1,-1,-1,-1,-1,0,1,1,1,1,1,1,1,1) (note: stats::filter takes the convolution filter in reverse, so we input the reverse of this). This creates a waveform which peaks at sudden large changes in amplitude. This means that we can use a standard peak-finding algorithm on the convolution, to find the inspirations.
@@ -85,14 +82,13 @@ Now, as stated in the introduction, we are interested in finding the inspiration
 insp_start <- VitalDBR::get_inspiration_start(sub_awp)
 ```
 
-
 The function returns the times of the peaks in a dataframe and we can then plot the inspirations on the AWP signal:
 ```{r,fig.width = 16}
-plot_awp(awp_data = sub_awp, add_insp_start = 'yes', insp_start_data = insp_start)
+VitalDBR::plot_awp(awp_data = sub_awp, add_insp_start = 'yes', insp_start_data = insp_start)
 ```
 
 ## Finding the diastolic and systolic peaks of the Arterial Blood Pressure (ART)
-To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter (low-pass) to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
+To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter (low-pass filter) to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
 
 ```{r}
 sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
@@ -112,13 +108,13 @@ knitr::kable(head(beats)) %>% scroll_box(width = "100%")
 
 Now we plot the Arterial blood pressure, together with the peaks and the inspiration:
 ```{r fig.width = 16, fig.align="center"}
-plot_art(sub_art, insp_start, beats)
+VitalDBR::plot_art(sub_art, insp_start, beats)
 ```
 Beautiful, right? 
 
 We can also plot the pulse pressure with the inspiration. NOTE: As the pulse pressure is a discrete measurement, this is plotted with a linear line interpolation.
 ```{r fig.width = 16, fig.align="center"}
-pp_plot(insp_start, beats)
+VitalDBR::pp_plot(insp_start, beats)
 ```
 
 But we want to know which inspiration every pulse pressure measurement belongs to, and we want to know the position of the pulse pressure measurement relative to the inspiration. To do this we use a function created by our advisor Johannes, that adds "ann_n" which says which inspiration a measurement belongs to. And "ann_rel_index" which gives the position relative to the inspiration (ie. it goes from 0 to 1 between each inspiration)
@@ -131,12 +127,12 @@ knitr::kable(head(beats_indexed)) %>% scroll_box(width = "100%")
 This plot then colors the pulse pressure measurements according to which inspiration they belong to. On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
 
 ```{r fig.width = 16, fig.align="center"}
-pp_plot_color(beats_indexed, insp_start)
+VitalDBR::pp_plot_color(beats_indexed, insp_start)
 ```
 
 
 
-```{r fig.width = 13, fig.align="center"}
+```{r fig.align="center", fig.width=13, warning=FALSE}
 pp_plot_color_and_index(beats_indexed, insp_start)
 ```
 
@@ -148,7 +144,6 @@ We can generally write the GAM structure as:
 $$g(E(Y))=α+s_1(x_1)+⋯+s_p(x_p)$$
 In our case this would translate to:
 $$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
-
 
 
 ## Why do we use a GAMs for modelling PPV?
@@ -172,7 +167,7 @@ gratia::draw(PP_gam,
 residuals = TRUE)
 ```
 
-We cam also extract the intercept from the model, which is also the mean of the pulse pressure. We need this below to calculate the PPV
+We can also extract the intercept from the model, which is also the mean of the pulse pressure. We need this below to calculate the PPV
 ```{r}
 alpha <- coef(PP_gam)[1] # intercept
 alpha
@@ -194,7 +189,15 @@ First we generate points from the spline with the predict function, then we calc
 $$ PPV = \frac{PP_{max}-PP_{min}}{mean(PP)} $$
 In the end we see that the pulse pressure is 5.5, which is in the "normal range", as defined by the interval $ 5 \leq PPV \leq 8$ that we are interested in.
 
-# Does PPV influence the number of days a patient spend in the ICU
+## Summary
+To sum up this section of our vignette, we have so far showcased how to interact with the VitalDB API through our function load_case. In our case, we have use the SNUADC/ART and Primus/AWP tracks, but the function also works for other tracknames. These tracknames can be found [here](https://vitaldb.net/dataset/?query=overview&documentId=13qqajnNZzkN7NZ9aXnaQ-47NWy7kx-a6gbrcEsi-gak&sectionId=h.d0wofkno1fxp). Please note that the function is case sensitive i.e. SNUADC/ART data can't be retrieved when typing SNUADC/art instead. If the specificed trackname and track id isn't valid, you will get a 'cannot open the connection to...' error message. 
+
+Next, we showcased how to subset the retrieved data from load_case() in order to work in seconds instead of hertz. With this data, we first determined the inspiration starts by using the AWP data, and then the beats. Afterwards, we plotted the AWP and ART data by using our plot_awp, plot_art and functions, respectively. 
+
+
+*NOT DONE*
+
+# Does PPV influence the number of days a patient spend in the ICU?
 This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU.
 
 ## Creating the dataset
@@ -822,6 +825,7 @@ But we have gotten other interesting information. Let's look at the highly signi
 countcoef <- coef(summary(zi_nbin_reg))$count
 exp(countcoef[countcoef[, 4] < 0.01, 1])
 
+summary(zi_nbin_reg)
 ```
 Emergency operations seem to be a very important variable, and we can see that it has a rate ratio og over 2. Meaning that an emergency stay doubles the amount of days spent in the ICU. 
 
