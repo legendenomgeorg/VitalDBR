@@ -14,7 +14,7 @@ output:
 This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
 First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
-In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $ 5 \leq PPV \leq 8$. 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether patient's time spent in the ICU (intensive care unit). To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $5 \leq PPV \leq 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare those using various metrics.
 
 ## The biological background
@@ -69,10 +69,7 @@ sec = 30 # Last 30 seconds from 10000. Such that the interval is now 10000 sec t
 Now we introduce our function: "subset_data". This function helps with choosing an interval of a timeseries defined by frequency. It automatically sets converts frequency to seconds and subsets the data. The reason the time variable is not converted to the row index, is that it makes it difficult to work with. 
 ```{r}
 sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
-```
 
-
-```{r echo=FALSE}
 knitr::kable(head(sub_awp))
 ```
 
@@ -87,7 +84,6 @@ Now, as stated in the introduction, we are interested in finding the inspiration
 insp_start <- VitalDBR::get_inspiration_start(sub_awp)
 ```
 
-
 The function returns the times of the peaks in a dataframe
 And we can then plot the inspirations on the AWP signal:
 ```{r,fig.width = 16}
@@ -99,10 +95,8 @@ To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we
 
 ```{r}
 sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
-```
 
-```{r echo=FALSE}
-knitr::kable(head(sub_art))
+knitr::kable(head(sub_art)) %>%  scroll_box(width = "100%")
 ```
 
 ```{r}
@@ -110,12 +104,9 @@ dygraph_signal(sub_art, 2, 3)
 ```
 
 Now that the data is prepared we use a function created by our advisor Johannes, thats finds the value and position of the peaks. It also finds the pulse pressure, which is just the difference between the systolic and diastolic blood pressure: $ PP = SBP - DBP $
-```{r warning=FALSE}
+```{r message=FALSE, warning=FALSE}
 beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,] # we skip the first observation
-```
 
-
-```{r echo=FALSE}
 knitr::kable(head(beats)) %>% scroll_box(width = "100%")
 ```
 
@@ -133,9 +124,7 @@ pp_plot(insp_start, beats)
 But we want to know which inspiration every pulse pressure measurement belongs to, and we want to know the position of the pulse pressure measurement relative to the inspiration. To do this we use a function created by our advisor Johannes, that adds "ann_n" which says which inspiration a measurement belongs to. And "ann_rel_index" which gives the position relative to the inspiration (ie. it goes from 0 to 1 between each inspiration)
 ```{r}
 beats_indexed <- waveformtools::add_time_since_event(beats, time_event = insp_start$time)
-```
 
-```{r echo=FALSE}
 knitr::kable(head(beats_indexed)) %>% scroll_box(width = "100%")
 ```
 
@@ -189,10 +178,6 @@ residuals = TRUE)
 alpha <- coef(PP_gam)[1] # intercept
 alpha
 ```
-
-
-
-
 
 Time to calculate PPV
 ```{r}
@@ -414,7 +399,6 @@ library(devtools)
 install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)
 library(MuMIn)
-#head(data)
 ```
 
 ## Motivation for statistical analysis:
@@ -503,10 +487,7 @@ data <- data[!(data$ppv_avg_last_30==0),]
 
 data <- na.omit(data)
 icu <- data$icu_days
-```
 
-
-```{r echo=FALSE}
 knitr::kable(head(data)) %>% scroll_box(width = "100%")
 ```
 
