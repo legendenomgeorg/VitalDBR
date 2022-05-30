@@ -1,5 +1,8 @@
 ---
-title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on mortality of open surgery patients"
+title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patients ICU stay"
+author: 
+  - "Jonas Arentoft, Frederik Pedersen & Georg Svendsen"
+  - "Data Project 2022, Aarhus University"
 output:
   prettydoc::html_pretty:
     theme: architect
@@ -826,7 +829,7 @@ We actually have access to a variable, "opname", which contains the exact name o
 
 
 ## Conclusion
-In conclusion we see no correlation between PPV and days in the ICU. 
+In conclusion we see no relationship between PPV and days in the ICU. This is either due to the confounders mentioned above, or simply because there is no relationship between the two. 
 
 But we have gotten other interesting information. Let's look at the highly significant coefficients of the zero inflated binomial distribution again, but transformed back out of log scale. 
 
@@ -846,7 +849,8 @@ exp(zerocoef[zerocoef[, 4] < 0.01, 1])
 
 
 ## Future work:
-Our original research question was whether PPV influenced in hopsital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital. If we had access to more data, that would be very interesting to investigate.
+Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital. If we had access to more data, that would be very interesting to investigate.
+Perhaps it is possible to create a more advanced gam, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. 
 
 **------> Har i flere idéer til det her?**
 
