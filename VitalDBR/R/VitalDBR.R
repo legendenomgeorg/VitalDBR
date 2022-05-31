@@ -20,7 +20,7 @@ check_hz <- function(data){
   if (is.na(data[3,1])){
     freq = data[2,1]
     data <- subset (data, select = -Time)
-    data<- na.omit(data) 
+    data<- na.omit(data)
     data <- cbind(data, "Time"=1:nrow(data)*freq)
     data <- data[, c(2,1)] # reorder columns'
     rownames(data) <- NULL
@@ -59,32 +59,47 @@ load_case <- function(tname, caseid){
   return(load_trk(tid))
 }
 
-
-#' Function for finding inspiration starts
+#' Function for using convolution filter
 #' @export
 #' @param data Dataframe with AWP data (Time, Primus.AWP)
 #' @param data_column Specify location of the AWP data column
 #' @param n Specify number of -1's and 1's on each side of 0 in the convolution filter (8 by default). For n = 2, the convoultion filter is: -1, -1, 0, 1, 1
-#' @value Returns a dataframe with inspiration start times
-get_inspiration_start <- function(data, data_column=2, n=8) {
-
+#' @value Returns a dataframe with convolution output signal
+get_convolution_data <- function(data, data_column = 2, n = 8) {
   before <- rep(1, n)
   after <- rep(-1, n)
 
   my_filter <- c(before, 0, after)
   convolution <- data.frame(stats::filter(x = data[,data_column],
-              filter= my_filter, sides=1, method="convolution"))
+                                          filter= my_filter, sides=1, method="convolution"))
   convolution <- cbind(convolution,data[,1])
-
   convolution <- convolution[, c(2,1)]
   names(convolution)[1] <- "time"
   names(convolution)[2] <- "values"
   convolution <- waveformtools::filter_signal(convolution, 25, 1500, signal_col = 2)
+
+  return (convolution)
+}
+
+#' Function for finding inspiration starts from convolution output signal
+#' @export
+#' @param convolution_data Dataframe with convolution_data
+#' @value Returns a dataframe with inspiration start times
+get_inspiration_start <- function(convolution_data) {
+  convolution <- waveformtools::filter_signal(convolution_data, 25, 1500, signal_col = 2)
   insp_start <- waveformtools::find_peaks(convolution$values_filt,m=100, na.ignore=TRUE)
   insp_start <- convolution$time[insp_start]
   insp_start <- data.frame(insp_start)
   names(insp_start)[1] <- "time"
-  return(insp_start)
+  return (insp_start)
+}
+
+#' Function for plotting Convolution Data
+#' @export
+#' @param convolution_data Dataframe with convolution_data
+#' @value Returns a ggplot
+plot_convolution_data <- function(convolution_data) {
+  ggplot(convolution_data, aes(time, values_filt)) + geom_line() +theme_classic() + labs(title = 'Convolution Output Signal', x = 'Time (sec)', y = 'Output Signal') + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 }
 
 #' Function for subsetting AWP and ART data

@@ -2,17 +2,13 @@
 % Please edit documentation in R/VitalDBR.R
 \name{get_inspiration_start}
 \alias{get_inspiration_start}
-\title{Function for finding inspiration starts}
+\title{Function for finding inspiration starts from convolution output signal}
 \usage{
-get_inspiration_start(data, data_column = 2, n = 8)
+get_inspiration_start(convolution_data)
 }
 \arguments{
-\item{data}{Dataframe with AWP data (Time, Primus.AWP)}
-
-\item{data_column}{Specify location of the AWP data column}
-
-\item{n}{Specify number of -1's and 1's on each side of 0 in the convolution filter (8 by default). For n = 2, the convoultion filter is: -1, -1, 0, 1, 1}
+\item{convolution_data}{Dataframe with convolution_data}
 }
 \description{
-Function for finding inspiration starts
+Function for finding inspiration starts from convolution output signal
 }

@@ -7,6 +7,12 @@
 subset_data(data, seconds, start_sec, filter = FALSE, cut_freq = 25)
 }
 \arguments{
+\item{data}{The data you want to subset. In dataframe format}
+
+\item{seconds}{The size of the interval, starting from "start_sec"}
+
+\item{start_sec}{Which second of the data you want the subset to start at}
+
 \item{filter}{Specify if a Butterworth Filter should be applied to the data (FALSE by default)}
 
 \item{cut_freq}{Specify cutoff frequency for the filter (25 by default)}

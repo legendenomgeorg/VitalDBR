@@ -12,16 +12,11 @@ output:
 ---
 
 # Introduction / Motivation
-This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. The vignette is split into different parts.
-First of all we want to prepare the data for analysis. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
+This vignette will show why VitalDBR is useful, if you want to do statistical analysis on data from VitalDB. VitalDB is a database containing data from more than 6000 patients that have undergone surgery at a hospital in South Korea. The core data set is comprised by waveform data (e.g. blood pressure recordings acquired at 500 Hz) which are  captured during the surgical procedures, but different pre-operative data is also available, such as preoperative laboratory tests, demographics and comorbidities. In addition, some post-operative data is also available, including outcome measures such as in-hospital mortality and post-operative length of stay in the hospital's intensive care unit (ICU). The vignette is split into different parts.
+First of all we want to prepare the data for analysis in R. This is a basic need because there are no current resources available in the scientific community that offers a platform to interact with the data using R. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
-In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether it influences patient's time spent in the ICU. To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $5 \leq PPV \leq 8$. 
+In the end we extend the use case to a novel investigation into the importance of the Pulse Pressure Variation (PPV) on whether it influences patient's time spent in the ICU. PPV is a variable that is widely used to guide the management of intravenous fluid administration, because it reflects to which extent the heart can handle more intravenous fluid. If PPV is high, the patient's heart can accomodate more fluid administration and it will pump better - this will often be beneficial - whereas when PPV is low, fluid administration is not beneficial and it will generally only carry the risk of side effects, such as edema. To do this we fit a GAM for every other minute during operation and see the proportion of those outside the interval $5 \leq PPV \leq 8$. 
 When the dataset is built, we use the results to do regression analysis with the icu-days as the dependent variable and other important variables like age, bmi and preoperative health of the patient as our independent variables. Our methods include Poisson-, Negative binomial- and Compound Poisson Generalized Linear Models and Zero-inflated Poisson and Negative binomial models. We do model diagnostics and determine which models are best suited, and finally compare the suited models using various metrics.
-
-## The biological background
-
-(skal udfyldes)
-
 
 # Fitting a gam
 ## Preparing everything
@@ -44,30 +39,30 @@ library(patchwork) # Package used for plotting
 
 Then we need to load some data. For that we have created the function "load_case", which takes in a monitoring machine, the track of interest and finally the caseid. 
 ```{r}
-data_art <- VitalDBR::load_case('SNUADC/ART', 1)
-data_awp <- VitalDBR::load_case('Primus/AWP', 1)
+data_art <- VitalDBR::load_case(tname = 'SNUADC/ART', caseid = 1)
+data_awp <- VitalDBR::load_case(tname = 'Primus/AWP', caseid = 1)
 ```
 
 In this case we load the tracks ART (Arterial Blood Pressure) and AWP (Airway Pressure) for patient 1. ART is measured by the "SNUADC" machine and AWP is measured by the "Primus" machine.
 Under the hood this function finds all tracks with the inputted caseid and then stiches together the right API call such that we get the the right data. The format of the data also makes it easy to convert to a timeseries format as the frequency is saved in the first row of the first column, like this:
 
 ```{r}
-tsp(ts(data_art[,2], frequency = 1/data_art[1,1])) # Output is first value, last value and frequency
+tsp(ts(data_art[,2], frequency = 1/data_art[1,1])) # Output is first value (1.00), last value (11541.31) and frequency (500)
 ```
 But we will continue working in the data.frame format for this vignette.
 
 To make sure that we work with the same data through out the first part of the vignette, we start out by defining an interval we want to work on
 ```{r}
 start = 10000 # Interval start
-sec = 30 # Last 30 seconds from the start
+length_of_segment_sec = 30 # Last 30 seconds from the start
 ```
 
 
 ## Finding the inspiration of AWP
 
-Now we introduce our function: "subset_data". This function helps with choosing an interval of a timeseries defined by frequency. It automatically converts frequency to seconds and subsets the data. 
+Now we introduce our function: "subset_data". This function helps with choosing an interval of a timeseries defined by frequency. It automatically converts sample number to seconds and subsets the data. 
 ```{r}
-sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = sec, start_sec = start)
+sub_awp <- VitalDBR::subset_data(data = data_awp, seconds = length_of_segment_sec, start_sec = start)
 knitr::kable(head(sub_awp))
 ```
 
@@ -78,8 +73,17 @@ VitalDBR::plot_awp(awp_data = sub_awp)
 
 Now, as stated in the introduction, we are interested in finding the inspiration of the airway pressure, which is the beginning of a breath. For that we have created the function "get_inspiration_start". By default, it works by applying a convolution filter of the form (-1,-1,-1,-1,-1,-1,-1,-1,0,1,1,1,1,1,1,1,1) (note: stats::filter takes the convolution filter in reverse, so we input the reverse of this). This creates a waveform which peaks at sudden large changes in amplitude. This means that we can use a standard peak-finding algorithm on the convolution, to find the inspirations.
 
+
 ```{r}
-insp_start <- VitalDBR::get_inspiration_start(sub_awp)
+convolution_data <- VitalDBR::get_convolution_data(sub_awp)
+```
+
+```{r,fig.width = 16}
+VitalDBR::plot_convolution_data(convolution_data)
+```
+
+```{r}
+insp_start <- get_inspiration_start(convolution_data)
 ```
 
 The function returns the times of the peaks in a dataframe and we can then plot the inspirations on the AWP signal:
@@ -91,7 +95,7 @@ VitalDBR::plot_awp(awp_data = sub_awp, add_insp_start = 'yes', insp_start_data =
 To find the diastolic and systolic peaks of the Arterial Blood Pressure (ART) we first subset the data, to the same interval as before. But the noise in the ART data can disturb our ability to find the peaks properly. Luckily you can give "subset_data" an optional argument called "filter". If the filter argument is set to TRUE, it applies a Butterworth filter (low-pass filter) to the data. The result can be seen if you zoom into the plot below (interactively!). We can also set the cutoff frequency for the filter with the argument "cut_freq" (default is 25). 
 
 ```{r}
-sub_art <- VitalDBR::subset_data(data = data_art, seconds = sec, start_sec = start, filter=TRUE, cut_freq = 25)
+sub_art <- VitalDBR::subset_data(data = data_art, seconds = length_of_segment_sec, start_sec = start, filter=TRUE, cut_freq = 25)
 knitr::kable(head(sub_art))
 # mote that the first few values are a bit out of sync, but that is due to the nature of a lowpass filter, it has to "dial in" before it is accurate. 
 ```
@@ -100,13 +104,13 @@ knitr::kable(head(sub_art))
 dygraph_signal(sub_art, 2, 3)
 ```
 
-Now that the data is prepared we use a function created by our advisor Johannes, thats finds the value and position of the peaks. It also finds the pulse pressure, which is just the difference between the systolic and diastolic blood pressure: $ PP = SBP - DBP $
+Now that the data is prepared we use a function created by our advisor Johannes, thats finds the value and position of the peaks. It also finds the pulse pressure, which is just the difference between the systolic and diastolic blood pressure: PP = SBP - DBP
 ```{r message=FALSE, warning=FALSE}
 beats <- waveformtools::find_abp_beats(sub_art,abp_col=3,time_col=1)[-1,] # we skip the first observation
 knitr::kable(head(beats)) %>% scroll_box(width = "100%")
 ```
 
-Now we plot the Arterial blood pressure, together with the peaks and the inspiration:
+Now we plot the Arterial blood pressure, together with the beats and the inspiration:
 ```{r fig.width = 16, fig.align="center"}
 VitalDBR::plot_art(sub_art, insp_start, beats)
 ```
@@ -132,7 +136,7 @@ VitalDBR::pp_plot_color(beats_indexed, insp_start)
 
 
 
-```{r fig.align="center", fig.width=13, warning=FALSE}
+```{r fig.align="center", fig.width=14, warning=FALSE}
 pp_plot_color_and_index(beats_indexed, insp_start)
 ```
 
@@ -144,7 +148,7 @@ The reason we use GAMs is that they do not assume a linear relationship between 
 
 
 
-Generalized Additive Models have two magical properties. The first is the fact that we do not need to know the shape of the predictive functions a priori, since they are defined as non-parametric splines. The underlying shipe is calculated through Splines, and utilizes regularisation to combat overfitting.
+Generalized Additive Models have two magical properties. The first is the fact that we do not need to know the shape of the predictive functions a priori, since they are defined as non-parametric splines. The underlying shape is calculated through Splines, and utilizes regularisation to combat overfitting.
 
 A spline is a function defined piecewise by polynomials. A spline is defined from the order of polynomials you want to fit for every "piece" of the interval and where the number of pieces are defined by the amount of knots.
 
@@ -162,7 +166,7 @@ In our case this would all translate to:
 $$g(E(PP))=α+s_1(ann\_rel\_index)+s_2(Time)$$
 Where $s_1$ is a cyclic cubic spline and $s_2$ is a normal cubic spline, as stated above
 
-In this project we use the GAM to find the PPV, by extracting the PPV from $s_1(Ann_rel_index)$ without the impact of the time trend $s_2(Time)$. 
+In this project we use the GAM to find the PPV, by extracting the PPV from $s_1(Ann\_rel\_index)$ without the impact of the time trend $s_2(Time)$. 
 
 
 
@@ -171,8 +175,8 @@ In this project we use the GAM to find the PPV, by extracting the PPV from $s_1(
 
 ## Why do we use a GAMs for modelling PPV?
 There exists other ways to calculate the PPV of the pulse pressure. They are often based on simpler methods from signal processing /time series analysis, where you calculate min, max and a time trend. They actually perform very well and are widely used for various purposes.
-The reason we use GAMs are first of all, that this is research and not industry. It has still not been definitively proved that GAM modelling of pulse pressure variation is more accurate than the normal methods, but our advisor Johannes' coming phd thesis seems to suggest it.
-Using a GAM we also get more insights and interpretability. It is possible to model uncertainty and confidence bounds, although we have not done that in this vignette, as it is not really relevant to what we are trying to answer. 
+The reason we use GAMs are first of all, that this is research and not industry. It has still not been definitively proved that GAM modelling of pulse pressure variation is more clinically useful than the normal methods, but our advisor Johannes' coming phd thesis seems to suggest it.
+The visualizations of the GAM modelling results are also extremely useful as model checking. There is also no doubt that the GAM - compared with less advanced methods - offers an efficient way to isolate the effect of respiration on pulse pressure. Finally, considering that the GAM is used for automatic detection at the end of this vignette across thousands of subjects' hour-long recordings, it should be appreciated that the GAM is theoretically less prone to noise artifacts than less advanced methods, simply because the GAM modelling by our design restricts the variation in pulse pressure to "originate" from the respiratory cycle. 
 
 **------> Er de her årsager rigtige? Er der flere?**
 
@@ -211,10 +215,10 @@ PPV*100
 First we generate points from the spline with the predict function, then we calculate the PPV from the predicted data with this formula:
 $$ PPV = \frac{PP_{max}-PP_{min}}{mean(PP)} = \frac{max(s_1(ann\_rel\_index))-min
 (s_1(ann\_rel\_index)))}{\alpha} $$
-In the end we see that the pulse pressure is 5.5, which is in the "normal range", as defined by the interval $ 5 \leq PPV \leq 8$ that we are interested in.
+In the end we see that the pulse pressure is 5.5, which is in the "normal range", as defined by the interval $5 \leq PPV \leq 8$ that we are interested in.
 
 ## Summary
-To sum up this section of our vignette, we have so far showcased how to interact with the VitalDB API through our function load_case. In our case, we have use the SNUADC/ART and Primus/AWP tracks, but the function also works for other tracknames. These tracknames can be found [here](https://vitaldb.net/dataset/?query=overview&documentId=13qqajnNZzkN7NZ9aXnaQ-47NWy7kx-a6gbrcEsi-gak&sectionId=h.d0wofkno1fxp). Please note that the function is case sensitive i.e. SNUADC/ART data can't be retrieved when typing SNUADC/art instead. If the specificed trackname and track id isn't valid, you will get a 'cannot open the connection to...' error message. 
+To sum up this section of our vignette, we have so far showcased how to interact with the VitalDB API through our function load_case. In our case, we have used the SNUADC/ART and Primus/AWP tracks, but the function also works for other tracknames which can be found [here](https://vitaldb.net/dataset/?query=overview&documentId=13qqajnNZzkN7NZ9aXnaQ-47NWy7kx-a6gbrcEsi-gak&sectionId=h.d0wofkno1fxp). Please note that the function is case sensitive i.e. SNUADC/ART data can't be retrieved when typing SNUADC/art instead. If the specificed trackname and track id isn't valid, you will simply get a 'cannot open the connection to...' error message. 
 
 Next, we showcased how to subset the retrieved data from load_case() in order to work in seconds instead of hertz. With this data, we first determined the inspiration starts by using the AWP data, and then the beats. Afterwards, we plotted the AWP and ART data by using our plot_awp, plot_art and functions, respectively. 
 
@@ -236,7 +240,7 @@ But before we can calculate the PPV we need to restrict our dataset to the follo
   + The type of anesthesia should be "General"
   
 
-(These restrictions were decided by our advisers)
+The reasons for this is that some limitations exists regarding the use and interpretation of PPV. Particularly, some procedures are not associated with the "right" type of ventilation and the ventilator settings. Also, videoscopic procedures (that are not "open") such as those where air is blown into the stomach to create space for that type of less invasive surgery, creates increased pressure in the abdominal region, which also changes PPV physiology. By selecting these procedures, we are sure that these limitations to PPV are not present.
 
 We also add the end and start time of the operation, as we need that later
 ```{r}
@@ -283,7 +287,9 @@ The algorithm below, gets a dataset where it extracts the current caseid. Then i
   + We use this to see whether it matters to for example have a lowered PPV as a result of the operation
   
 These variables are then used later in the statistical analysis to determine whether they influence the outcome. 
-This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements, mean that we can't include ALL of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. The interval stems from domain knowledge, and we constrain it between 0 and 1 as the proportion is more relevant than the amount of measurements below or above.
+This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements, mean that we can't include ALL of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. This is because the data originates from recent years, where tidal volume settings are lower compared with 10-20 years ago.
+
+The interval stems from domain knowledge, and we constrain it to the time spent outside the [5;8] interval relative to the entire surgical length, i.e. a number between 0 and 1 as the proportion is more relevant than the amount of measurements below or above.
 
 Here is the algorithm:
 ```{r}
@@ -413,13 +419,11 @@ process_cases <- function(data){
 
 * Notes:
 
-+ This is a very computationally intensive function. It took almost 16 hours to calculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
+  + This is a very computationally intensive function. On a regular laptop, ittook almost 16 hours to calculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the computational time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
 
-+ A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad that no "organic process" can have caused the quality decline.
+  + A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad condition that no "organic process" can have caused the quality decline.
 
 # Statistical Analysis
-
-
 ```{r, message=FALSE}
 library(MASS)
 library(pscl)
