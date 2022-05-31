@@ -24,7 +24,7 @@ Before we get started, we need a couple of packages.
 ```{r,message=FALSE}
 ####### This is how you install VitalDBR!
 library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
+install_github('legendenomgeorg/VitalDBR/VitalDBR', force= TRUE)
 library(VitalDBR)
 #######
 library(comprehenr)
@@ -625,11 +625,9 @@ summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log"))
 ```
 We see a lot of significant coefficients in this summary, but before we can interpret them, we need to know if our model breaks any assumptions.
 
-If we do some further investigation, we can also observe that the mean is not equal to the variance:
-**----> Jeg har ikke den store erfaring med Poisson modeller, men ligesom ved en Gausisk model, er antagelsen vel at det er den betingede fordeling der er Poisson fordelt?. Altså E(icy_days|X) = Var(icu_days|X).**
+If we do some further investigation, we can also observe that the empirical mean is not equal to the empirical variance:
 
 ```{r}
-
 mean(icu)
 var(icu)
 ```
@@ -637,7 +635,7 @@ This violates the properties of the poisson distribution, where $$E(X) = Var(X) 
 When the variance is larger than the mean, we are working with as so-called "overdispersed" model [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html), which further incentivises us to look into more advanced modelling. 
 
 ### Overdispersement
-We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1. [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html)
+We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1 as a rule of thumb. [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html)
 
 ```{r}
 pois_reg$deviance/pois_reg$df.residual
@@ -763,10 +761,7 @@ library(latex2exp)
 icu_barplot + ggtitle("Compound Poisson Distribution") + xlab(TeX("X ~ Gamma($alpha, beta$)")) + ylab(TeX("T ~ poisson($lambda$)"))
 ```
 
-To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is not clearly defined. 
-
-(----> Hvorfor er p(X=0) ikke defineret i en ZIP?)   
-
+To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is a degenerate distribution function. [Source](https://www.otago.ac.nz/ripe/otago301201.pdf).
 
 
 This means that we can model our dependent variable as:
@@ -874,28 +869,34 @@ Another confounding factor is that there will be a few patients that will be ope
 ## Conclusion
 In conclusion we see no relationship between PPV and days in the ICU. This is either due to the confounders mentioned above, or simply because there is no relationship between the two. 
 
-But we have gotten other interesting information. Let's look at the highly significant coefficients of the zero inflated binomial distribution again, but exponentiated to get the rate ratios First we look at the negative binomial part of the regression:
-
+But we have gotten other interesting information. Let's look at the summary again:
 ```{r}
 summary(zi_nbin_reg)
+```
 
+
+And then extract the highly significant coefficients of the zero inflated binomial distribution again, but exponentiated to get the rate ratios First we look at the negative binomial part of the regression:
+
+```{r}
 countcoef <- coef(summary(zi_nbin_reg))$count
 count_table <- (exp(countcoef[countcoef[, 4] < 0.01, 1]))
 kable(count_table, col.names = c("Coefficient"))
 ```
-Emergency operations seem to be a very important variable, and we can see that it has a rate ratio og over 2. Meaning that an emergency stay doubles the amount of days spent in the ICU. 
 
-We also see that kidney health is important. A higher amount of creatinine decreases days in the ICU. The kidneys decide how much blood is flowing in our veins, by regulating the body's fluid responsiveness. As stated in the biological introduction in the start, we are looking at fluid responsiveness, and a bad functioning kidney will of course influence the operation outcome. 
+Before analyzing these coefficients, note that these odds are for the people who have a chance of visiting the ICU, as this is for the count model. 
 
-**---> Pas på med at tolke coefficienterne som effekter. De er alle betingede af at de andre er konstante, og I mange tilfælde kan det give betingede effekter der er markant anderledes end den faktiske effekt. Det er desuden meget usandsynligt at høj kreatinin beskytter mod længere indlæggelse (høj betyder dårlig nyrefunktion), så der er nok nærmere tale om confounding. Måske at folk med dårlig nyrefunktion bliver opereret for andre ting end dem med god funktion.** 
+We also see the intercept $e^{-1.0445792}=0.35$ is the baseline length of an ICU stay for those who have a chance of visiting the ICU. 
+
+Emergency operations seem to be a very important variable, and we can see that it has a rate ratio of over 2. Meaning that an emergency stay doubles the amount of days spent in the ICU. 
+
+We also see that kidney health is important. A higher amount of creatinine decreases days in the ICU. This doesn't really make sense, as a high amounts of creatinine generally is a bad thing. This is most likely due to some confounding effect. ie. that people with weak kidney function are getting different operations than those with normal functioning kidneys
 
 We also see that liver health (preop_alt) is significant. This is also expected as the liver is such a generally important organ, as it excretes toxins from the body. IF the liver function is bad it will generally impact the operation outcome negatively.
 
-ASA score, which is a measurement from 1-6 of whether the patient is healthy enough to be operated, is also highly significant. Actually a one increase in asa doubles the days in the ICU.
+ASA score, which is a measurement from 1-6 of whether the patient is healthy enough to be operated, is also highly significant. Actually a one increase in ASA doubles the days in the ICU.
 
-Knifetime of course also influences the time spent, as longer operations generally are more dangerous. One hour of operation time increases the icu stay by 15 percent
+Knifetime of course also influences the time spent, as longer operations generally are more dangerous. One hour of operation time increases the ICU stay by 15 percent
 
-** Beskriver coefficienterne odds ratio for extra zero/Poisson eller omvendt? Creatinin ser ud til at have modsat effekt på zero delen. Lavere odds for zero, men også lavere forventet icu_days) ** 
 
 Now we look at the zero-inflation part of the regression:
 ```{r}
@@ -903,17 +904,15 @@ zerocoef <- coef(summary(zi_nbin_reg))$zero
 zero_table <- exp(zerocoef[zerocoef[, 4] < 0.01, 1])
 kable(zero_table, col.names = c("Coefficient"))
 ```
-We see that ASA, emop, kidney health and the length of the operation influence whether the patient stays 0 or more days. 
+First of all the baseline odds of being among those who always spend 0 days in the ICU is almost 2000, which is very high, meaning that people generally do not have ever have a chance of visiting the ICU.
+
+We see that a one unit increase in ASA, EMOP, kidney health and knife_time decreases the chance of staying 0 days.
 Most of these  make sense with the same argumentation as above. Knife_time is a bit more finnicky though. One interpretation is that knife_time is actually a better measurement of the danger of an operation than "dangerop" is, since long operations generally are more dangerous. 
-
-
-
-( fatter ikke intercept delen)
-We also see that the intercept is significant, meaning that it is not simply 50/50 whether you stay zero or more days in the ICU.
 
 The above significant variables are not really that surprising, except for knife_time influencing the zero inflation of the regression, as that is a measurement which is first known after the operation. 
 
 
+[Source for coefficient interpretation](https://rpubs.com/kaz_yos/pscl-2)
 
 ## Future work:
 Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital.
