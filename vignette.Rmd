@@ -528,10 +528,16 @@ icu <- data$icu_days
 knitr::kable(head(data)) %>% scroll_box(width = "100%")
 ```
 
+Next, we produce scatter plots in order to get a visual on how ICU days after surgery depends on some of the independent variables that we will use in our
 
-## Linear Regression
-First of all we want to set a baseline for our future models, we do this with a linear regression:
-
+```{r,fig.width = 12}
+ggplot(data = data, aes(y = icu, x = age)) + geom_point() + labs(x = 'Age') + 
+  ggplot(data = data, aes(y = icu, x = dangerop)) + geom_point() + labs(x = 'Dangerous operation \n0 = no, 1 = yes') + 
+  ggplot(data = data, aes(y = icu, x = knife_time)) + geom_point() +labs(x = 'Operation Knife Time') + 
+  ggplot(data = data, aes(y = icu, x = asa)) + geom_point() + labs(x = 'ASA score') + 
+  ggplot(data = data, aes(y = icu, x = preop_cr)) + geom_point() + labs(x = 'preop_cr \nMeasure for Kidney Health (high is bad)') + 
+  ggplot(data = data, aes(y = icu, x = preop_alt)) + geom_point() + labs(x = 'preop_alt \nMeasure for Liver Health (high is bad)') + plot_annotation(title = 'Scatter Plots with ICU days against \nsome of the independent variables')  & theme_classic() & labs(y = 'ICU days') & geom_point(col ='#63A0E1') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+```
 ```{r}
 summary(linear_model <-lm(icu_days ~ . , data=data))
 ```
