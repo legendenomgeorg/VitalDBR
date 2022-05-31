@@ -190,7 +190,10 @@ PP_gam <- gam(
    knots = list(ann_rel_index = c(0,1)),
    method = "REML", 
    data = PP_data)
+```
 
+
+```{r,fig.width = 12}
 gratia::draw(PP_gam, residuals = TRUE,   resid_col = "orange", ci_col = "#6378e1",) & theme_classic() & geom_line(colour = '#63A0E1', size = 1)
 
 ```
@@ -570,7 +573,8 @@ icu_barplot<-ggplot(data=as.data.frame(count), aes(x=as.integer(as.character(Var
   theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 icu_barplot
 ```
-We see that it doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
+
+We see that our data doesn't follow a normal distribution and that it seems to follow a sort of poisson distribution, which also makes intuitive sense due to the nature of time spent in the ICU. 
 
 But taking a closer look, we see that there are way too many 0-observations for it to be a simple poisson distribution. 
 ```{r}
