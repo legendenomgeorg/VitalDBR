@@ -7,7 +7,7 @@
 load_VDB(file_url)
 }
 \arguments{
-\item{file_url}{URL for API endpoint}
+\item{file_url}{URL for API endpoint. Found at https://vitaldb.net/dataset/?query=api&documentId=1_VTteoI5v-cdFkUTSnhYoGCqyq8dAC-_k50oM1QOjkU&sectionId=h.av1x1sa5y1he}
 }
 \value{
 A dataframe with values from the specified endpoint
