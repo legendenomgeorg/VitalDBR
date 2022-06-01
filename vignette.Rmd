@@ -441,7 +441,7 @@ process_cases <- function(data){
 
 * Notes:
 
-  + This is a very computationally intensive function. On a regular laptop, it took almost 16 hours to calculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the computational time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
+  + This is a very computationally intensive function. On a regular desktop, it took almost 16 hours to calculate the PPV aggregates for all 1360 operations. Running a profiler revealed that the function "find_abp_beats" was the main culprit, and that  over 80% of the computational time was spent in that function. Future work would preferably optimize that function. From our first iteration of the function to the end result we decreased the amount of RAM and cpu needed substantially, both by utilizing R's vectorization, and also managing our RAM during the algorithm, ensuring that we remove variables from RAM manually, as soon as they were not needed anymore.
 
   + A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad condition that no "organic process" can have caused the quality decline.
 
@@ -505,7 +505,7 @@ The independent variables we choose to do this study are the following:
   + A binary indicator of whether the patient has hyptertension (High Blood Pressure)
 
 * preop_dm
-  + Whether the patient has too high blood pressure
+  + Whether the patient has diabetes
   
 * preop_cr
   + A measurement of how healthy the patients kidneys are (high is bad)
@@ -617,7 +617,7 @@ $$ E[Y|X] = X\beta  $$
 Since $E[\epsilon | X] ) 0$.
 
 
-Generalized Linear Models, then make the crucial assumption, that the transformed conditional expectiation of y given x is a linear combination of regression variables [Source](https://en.wikipedia.org/wiki/Generalized_linear_model#Overview)
+Generalized Linear Models, then make the crucial assumption, that the transformed conditional expectation of Y given x is a linear combination of regression variables [Source](https://en.wikipedia.org/wiki/Generalized_linear_model#Overview)
 $$ g(E[Y|X]) =  X\beta  $$
 This means we can formulate the GLM as:
 $$ E[Y|X] = g^{-1}( X\beta ) $$
@@ -625,16 +625,16 @@ When using GLM's in r, we choose the "family", which decides the link function $
 
 A standard linear regression is actually just a GLM with the "gaussian family" ie. errors normally distributed and the identity function as the link function! Best illustrated with the formula we know as:
 $$Y \sim N( X\beta, \sigma^2) $$
-Where the mean is $\mu$ is given by $E[Y|X] = g^{-1}( X\beta)$ where $g(x) = x$ ie. the identity function.
+Where the mean $\mu$ is given by $E[Y|X] = g^{-1}( X\beta)$ where $g(x) = x$ ie. the identity function.
 
 Similarly we can write our poisson GLM in this fashion:
 When we introduce the log link function to the formula above it becomes
 $$ log(E(Y|X)) =  X\beta $$
-$$ E[Y|X] = e^{ X\beta} $$
-And when we reintroduce the poisson error term, we get our final model:
-$$ Y \sim Poisson( e^{ X\beta} )$$
-This is the model we will try now. 
+$$ E[Y|X] = e^{ X\beta} = \lambda $$
 
+And when we reintroduce the poisson error term, we get our final model:
+$$ ICU \sim Poisson( e^{ X\beta} )$$
+This is the model we will try now. 
 
 
 ### Poisson GLM
@@ -645,14 +645,15 @@ summary(pois_reg <- glm(icu_days ~ ., data = data, family='poisson'(link="log"))
 ```
 We see a lot of significant coefficients in this summary, but before we can interpret them, we need to know if our model breaks any assumptions.
 
-If we do some further investigation, we can also observe that the empirical mean is not equal to the empirical variance:
+If we do some further investigation, we can also observe that the empirical mean of our dependent variable is not equal to the empirical variance of the dependent variable:
 
 ```{r}
 mean(icu)
 var(icu)
 ```
-This violates the properties of the poisson distribution, where $$E(X) = Var(X) = \lambda, \ \ X \sim poisson(\lambda)$$ [Source](https://www.probabilitycourse.com/appendix/some_important_distributions.php)
-When the variance is larger than the mean, we are working with as so-called "overdispersed" model [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html), which further incentivises us to look into more advanced modelling. 
+This violates the properties of the poisson distribution, where $$E(X) = Var(X) = \lambda, \ \ X \sim poisson(\lambda)$$ [Source](https://www.probabilitycourse.com/appendix/some_important_distributions.php). Meaning that our dependent variable does not seem to follow a poisson regression, which could indicate that using poisson as our family for the GLM is non-optimal.
+
+When the variance is larger than the mean, we are working with a so-called "overdispersed" model [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html), which further incentivises us to look into more advanced modelling. 
 
 ### Overdispersement
 We can test for overdispersement by dividing the residual deviance with the number of degrees of freedom, if the model is appropriately dispersed it should equal 1 as a rule of thumb. [Source](http://biometry.github.io/APES//LectureNotes/2016-JAGS/Overdispersion/OverdispersionJAGS.html)
@@ -674,15 +675,16 @@ $$Y \sim NB(r,p) $$
 where r is the number of failures until the experiment is stopped and p is the probability of success. This is the normal formulation of the distribution, but the distribution can also be formulated as a poisson distribution with an added Gamma noise variable $r$ which has mean 1 and a scale parameter $v$.
 This means that we can formulate the Negative Binomial distribution in terms of it's mean and a dispersement variable $r$ [Source](https://en.wikipedia.org/wiki/Negative_binomial_distribution#Alternative_formulations)
 $$Y \sim NB(\mu, \alpha)  = \frac{\Gamma(r+k)}{k ! \Gamma(r)}\left(\frac{r}{r+\mu}\right)^{r}\left(\frac{\mu}{r+\mu}\right)^{k} $$
-This in itself is not that interesting, but now the distribution is defined from it's mean, and because the GLM models the mean of a regression this allows us to use the negative binomial distribution as our family.
+This in itself is not that interesting, but now the distribution is defined by its mean, and because a GLM is modelling the mean of a regression this allows us to use the negative binomial distribution as our family.
 
 The mean and variance of this formulation can then be written as:
 $$E[Y] = m $$
 $$Var[Y] = m+\frac{m^2}{r} $$
 Where $\alpha = \frac{1}{r}$ is the dispersion parameter in the GLM output below, which controls the variance. Note that as this dispersion parameter gets larger and larger, the variance converges to the same value as the mean, and then the negative binomial distribution magically turns into the poisson distribution. This means that we now have a distribution that is similar to the poisson, but we can vary the variance, this is perfect since we can account for overdispersion by changing $r$. And the GLM-function will estimate the best $r$ itself
 
-Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula for the regression mean becomes:
-$$Y \sim NB(e^{ X\beta}, r)  $$
+
+Now, when fitting the negative binomial we can express it in terms of its mean through a log link and $r$ , which means that the formula for our regression becomes:
+$$ICU \sim NB(e^{ X\beta}, r)  $$
 Running the regression in R gives us the following result:
 ```{r}
 nbin_reg <- MASS::glm.nb(icu_days ~ . , data=data)
@@ -704,7 +706,7 @@ Which is a binomial GLM, that predicts the odds of seeing an event given a vecto
 
 The second is a poisson distribution 
 $$\operatorname{Pr}\left(Y=y_{i}\right)=(1-\pi) \frac{\lambda^{y_{i}} e^{-\lambda}}{y_{i} !}, \quad y_{i}=1,2,3, \ldots$$
-Where $ \pi $ is the probability of of extra zeros
+Where $ \pi $ is the probability of extra zeros
 
 These ideas are then transformed to a GLM, like we've shown above, and can then be modelled in r with the "pscl" package. 
 
@@ -732,7 +734,7 @@ As we think that only a specific set of variables influences the zero inflation.
 [Source for formulations in the "Details" section](https://www.rdocumentation.org/packages/pscl/versions/1.5.5/topics/zeroinfl)
 
 
-In this case we first of all believe that emergency operations influence whether people are designated to spent 0 days in the ICU. With a simple tally, we can see that people undergoing non emergency operations generally spend 0 days in the ICU, and people undergoing emergency operations genereally spend more than 0 days in the icu
+In this case we first of all believe that emergency operations influence whether people are designated to spent 0 days in the ICU. With a simple tally, we can see that people undergoing non emergency operations generally spend 0 days in the ICU, and people undergoing emergency operations generally spend more than 0 days in the ICU
 
 ```{r}
 # Number of non-emergency patients who spend 0 days in the icu, divided by number of non emergency patients
@@ -753,7 +755,7 @@ Lastly we add all variables that indicate something about the condition of the p
 
 
 ### Zero inflated negative binomial
-But actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations. This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned earlier.
+Actually we might be suffering from both zero-inflation AND overdispersement in the non zero observations. This calls for the zero inflated negative binomial model. This model accounts for zero-inflation, but it also has a shape better suited for overdispersed data due to the overdispersement parameter mentioned earlier.
 ```{r}
 zi_nbin_reg <- pscl::zeroinfl(icu_days ~ .| . -ppv_under5 -ppv_over8 -ppv_avg_last_30, data=data, dist="negbin")
 summary(zi_nbin_reg)
@@ -772,16 +774,11 @@ Where
 $$ T \sim Pois(\lambda), X_{i} \stackrel{\mathrm{iid}}{\sim} \operatorname{Gamma}(\alpha, \beta), \ \ T \perp X_{i}$$
 Where $\perp$ means independence between two random variables.
 
+
 In our case, this formula can be interpreted with an example. Let's say we are looking at the influence of our independent variables on patients spending 29 days in the ICU ($Y=29$). Then this is comprised of two different stochastic variables. T which determines the number (count) of patients who spend 29 days in the ICU. In our case, the number of patients is given by the poisson distribution. 
-And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution.
+And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution. 
 
-To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T (keeping T fixed and evaluating X).
-```{r}
-library(latex2exp)
-icu_barplot + ggtitle("Compound Poisson Distribution") + xlab(TeX("X ~ Gamma($alpha, beta$)")) + ylab(TeX("T ~ poisson($lambda$)"))
-```
-
-To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where p(X=0) is a degenerate distribution function. [Source](https://www.otago.ac.nz/ripe/otago301201.pdf).
+To clarify, the amount of gamma distributions, depends in itself on the poisson distribution. When the poisson distribution, T, comes out to zero, then there are no gamma distributions in the sum above. which is the reason why this distribution is so powerful! When $T=0$ then $Y=0$, which allows the distribution to have a defined probability mass function at it's origin. This is in contrast with the zero inflated model, where we need two combine distributions and where p(X=0) is a degenerate distribution function with all of its mass placed at 0. [Source](https://www.otago.ac.nz/ripe/otago301201.pdf).
 
 
 This means that we can model our dependent variable as:
@@ -790,7 +787,7 @@ Where the parameters are defined as so:
 
 - $\mu = E(Y)$ is the mean.
 
-- $\phi$  is the dispersion parameter which, crudely said, indicates whether the distribution is wide or narrow
+- $\phi$  is the dispersion parameter.
 
 - $\rho$ is the "index parameter" and indicates which distribution from the Tweedie family we are looking at. As indicated [here](https://en.wikipedia.org/wiki/Tweedie_distribution) under "related distributions". The index parameter should lie in $1 < \rho < 2$, if we are working with a compound poisson-gamma distribution.
 
@@ -798,13 +795,15 @@ In this form the expected value and variance is given by:
 $$E[Y] = \mu $$
 $$ Var[Y] = \phi \cdot \mu^\rho $$
 As seen previously, we can link the mean to the linear predictors through the log function. And we can finally write it in the same fashion as the two previous GLMs
-$$ Y \sim CPois(e^{X\beta}, \phi, \rho)$$
+$$ ICU \sim CPois(e^{X\beta}, \phi, \rho)$$
 
 We can finally do this compound poisson regression using the library "cplm" 
 ```{r}
 c_pois_reg <- cplm::cpglm(icu_days ~ . , data = data, link = "log")
 summary(c_pois_reg)
 ```
+
+But before we start interpreting coefficients, let's finally compare the models we have and choose the best.
 
 ## Comparing all models
 
@@ -843,12 +842,11 @@ logLik_tweedie <-
 
 logliks <- logLik_tweedie(c_pois_reg)
 N <- nrow(data)
-k = logLik_tweedie(c_pois_reg)[2] # number of parameters in model
-BIC_c_pois_reg <- -2*logliks+log(N)*k
+k = logliks[2] # number of parameters in model
+BIC_c_pois_reg <- -2*logliks[1]+log(N)*k 
 
 # also calculating AICc
 AICc_c_pois_reg <- c_pois_reg$aic + (2*k^2+2*k)/(N-k-1)
-
 ```
 
 Here we will create a table of metrics to better compare the results:
@@ -878,7 +876,9 @@ length(nbin_reg$coefficients)+1
 length(zi_nbin_reg$coefficients$count) + length(zi_nbin_reg$coefficients$zero) +1
 
 ```
-In the end neither model really seem to be influenced by the pulse pressure variation during the operation. There is some significance to the "first_30_minuter_ppv", but as stated before, that is more of a measurement of the patient condition pre operation, and is therefore not something influenced by the amount of liquid given to the patient during the operation. 
+Which might be more important.
+
+First we will discuss some confounding factors, and then we will interpret the coefficients of the zero inflated binomial regression.
 
 ## Discussion of confounders
 Probably our biggest confounder is the operation type. We have tried to account for this with the "dangerop" variable, but it is a very crude generalization of the severity of the operation. The reason why operation type is a confounder is that some operations almost always will have you spent days in the icu, and some will almost never. We propose a solution in the "Future Work" section below
@@ -887,15 +887,15 @@ Another confounding factor is that there will be a few patients that will be ope
 
 
 ## Conclusion
-In conclusion we see no relationship between PPV and days in the ICU. This is either due to the confounders mentioned above, or simply because there is no relationship between the two. 
-
-But we have gotten other interesting information. Let's look at the summary again:
+Looking at the summary of the zero inflated binomial regression:
 ```{r}
 summary(zi_nbin_reg)
 ```
+In conclusion we see no relationship between PPV and days in the ICU. This is either due to the confounders mentioned above, or simply because there is no relationship between the two. 
 
+But we still can see some interesting results, to investigate them we extract the highly significant coefficients, and exponentiate them to get the rate ratios.
 
-And then extract the highly significant coefficients of the zero inflated binomial distribution again, but exponentiated to get the rate ratios First we look at the negative binomial part of the regression:
+First we look at the negative binomial part of the regression:
 
 ```{r}
 countcoef <- coef(summary(zi_nbin_reg))$count
@@ -911,11 +911,11 @@ Emergency operations seem to be a very important variable, and we can see that i
 
 We also see that kidney health is important. A higher amount of creatinine decreases days in the ICU. This doesn't really make sense, as a high amounts of creatinine generally is a bad thing. This is most likely due to some confounding effect. ie. that people with weak kidney function are getting different operations than those with normal functioning kidneys
 
-We also see that liver health (preop_alt) is significant. This is also expected as the liver is such a generally important organ, as it excretes toxins from the body. IF the liver function is bad it will generally impact the operation outcome negatively.
+We also see that liver health (preop_alt) is significant. This is also expected as the liver is such a generally important organ, as it excretes toxins from the body. If the liver function is bad it will generally impact the operation outcome negatively.
 
 ASA score, which is a measurement from 1-6 of whether the patient is healthy enough to be operated, is also highly significant. Actually a one increase in ASA doubles the days in the ICU.
 
-Knifetime of course also influences the time spent, as longer operations generally are more dangerous. One hour of operation time increases the ICU stay by 15 percent
+Knife-time of course also influences the time spent, as longer operations generally are more dangerous. One hour of operation time increases the ICU stay by 15 percent
 
 
 Now we look at the zero-inflation part of the regression:
@@ -937,13 +937,13 @@ The above significant variables are not really that surprising, except for knife
 ## Future work:
 Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital.
 
-Another dependent variable that would hold much more information than ICU stay, would be 30-day mortality, ie. whether a patient dies within 30 days after the operation. If that is not possible, even having acces to the length of the hospital stay, would contain more information than length of ICU stay.
+Another dependent variable that would hold much more information than ICU stay, would be 30-day mortality, ie. whether a patient dies within 30 days after the operation. If that is not possible, even having access to the length of the hospital stay, would contain more information than length of ICU stay. We sadly do nto have access to this, but it might be possible for the VitalDBR team to get this data
 
 To combat the operation type confounder bias, we actually have access to a variable, "opname", which contains the exact name of the operation. An idea would be to have several doctors go through all the 148 different operations present in the dataset, and divide them into 5 or so different categories for the risk of an ICU stay. But this was not possible for us to do. 
 
-Perhaps it is possible to create a more advanced GAM, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the gam for every second minute for every operation, and instead we could just fit a gam for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continous function instead of a discrete series of measurements. Though this would break the "additive" part of the model, so a GAM is perhaps not the right choice for this.
+Perhaps it is possible to create a more advanced model, where the amplitude (PPV) of the first spline, depends on the time trend. This would eliminate the need to calculate the GAM for every second minute for every operation, and instead we could just fit a model for the entire operation. This would greatly decrease computation time, and would also create the opportunity for more advanced modelling, when the PPV is defined as a continuous function instead of a discrete series of measurements. Though this would break the "additive" part of the model, so a GAM is perhaps not the right choice for this.
 
-Another very important aspect that would be interesting to somehow model, is how much liquid the patient recieves during the operation. In the end, it is the motivation for this statistical modelling. We would like to see if there are more information in PPV during the operation, if we take into account how much liquid the patient has recieved. Furthermore, estimated blood loss, which adding liquid is trying to help against by giving the heart more liquid such that it is able to pump properly, could be combined with the liquid variable. Both amount of liquid (the sum of colloid and crystalloid fluids) and estimated blood loss are actually available in the VitalDBR database, but it was not in the scope of this project.
+Another very important aspect that would be interesting to somehow model, is how much liquid the patient receives during the operation. In the end, it is the motivation for this statistical modelling. We would like to see if there are more information in PPV during the operation, if we take into account how much liquid the patient has received. Furthermore, estimated blood loss, which adding liquid is trying to help against by giving the heart more liquid, such that it is able to pump properly, could be combined with the liquid variable. Both amount of liquid (the sum of colloid and crystalloid fluids) and estimated blood loss are actually available in the VitalDBR database, but it was not in the scope of this project.
 
 There are also many more available waveforms that could be included in the analysis. An obvious one would be the central venous pressure, which is the pressure in the "vanae cavae", as we would get a better understanding of how the heart behaves during the operation. Another prospect is the ventilator settings, to get better insights into the heart-lung interaction.
 
