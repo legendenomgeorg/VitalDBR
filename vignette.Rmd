@@ -1,5 +1,5 @@
 ---
-title: "Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patient's ICU stay"
+title: "VitalDBR Vignette: Data Extraction, GAM modelling and Statistical Analysis"
 author: 
   - "Jonas Arentoft, Frederik Pedersen & Georg Svendsen"
   - "Data Project 2022"
@@ -26,7 +26,7 @@ When patients at hospitals undergo general anesthesia they will be put in mechan
 To make sure that the heart pumps hard enough to push blood out into the whole body, patients can receive a liquid preload that will aid the heart by heightening its stroke volume. How effective this liquid preload is depends on a patient's position on the Frank-Starling curve, which shows the correlation between preload and stroke volume. The only catch is that the effect of liquid preload lessens the more "pre-filled" the patient already is. This means that it is not always beneficial to inject a patient with low stroke volume with more liquid preload. The reason that PPV is interesting is that it is the slope on the Frank Starling curve, and therefore also acts as an indication of a patient's position on the Frank-Starling curve. This makes PPV a valuable tool in guiding the decision to inject (more) liquid preload or not.
 
 ```{r echo=FALSE, out.width='100%'}
-knitr::include_graphics('Frank-Starling_curve.PNG')
+knitr::include_graphics('Figures/Frank-Starling_curve.PNG')
 ```
 
 ## Preparing everything
