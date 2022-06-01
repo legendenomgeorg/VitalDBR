@@ -11,7 +11,8 @@ output:
     math: katex
 ---
 
-# Introduction and Motivation
+# Exploring VitalDBR and modelling of GAMs
+## Introduction and Motivation
 This vignette will show why VitalDBR is useful if you want to do statistical analysis on data from VitalDB. VitalDB is a database containing data from more than 6000 patients that have undergone surgery at a hospital in South Korea. The core data set is comprised by waveform data (e.g. blood pressure recordings acquired at 500 Hz) which are  captured during the surgical procedures, but different pre-operative data is also available, such as preoperative laboratory tests, demographics and comorbidities. In addition, some post-operative data is also available, including outcome measures such as in-hospital mortality and post-operative length of stay in the hospital's intensive care unit (ICU). The vignette is split into different parts.
 First of all we want to prepare the data for analysis in R. This is a basic need because there are no current resources available in the scientific community that offers a platform to interact with the data using R. The data we are interested in is the Arterial Blood Pressure (ART) and the Airway Pressure (AWP). We subset filter and detect events for this data through signal processing. 
 After that we show how to use the processed data and detected events to fit a Generalized Additive Model (GAM) and extract the pulse pressure variation. 
@@ -28,7 +29,6 @@ To make sure that the heart pumps hard enough to push blood out into the whole b
 knitr::include_graphics('Frank-Starling_curve.PNG')
 ```
 
-# Fitting a gam
 ## Preparing everything
 Before we get started, we need a couple of packages. 
 
@@ -37,7 +37,7 @@ Before we get started, we need a couple of packages.
 # This is how you install VitalDBR!
 ##################################################################
 library(devtools)                                               
-install_github('legendenomgeorg/VitalDBR/VitalDBR', force= TRUE)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
 library(VitalDBR)                                               
 ##################################################################
 
@@ -96,13 +96,13 @@ convolution_data <- VitalDBR::get_convolution_data(sub_awp)
 ```
 
 Next, we plot the convolution output signal. The maximums indicate inspiration starts!
-```{r,fig.width = 16}
+```{r message=FALSE, warning=FALSE}
 VitalDBR::plot_convolution_data(convolution_data)
 ```
 
 We now detect the maximum points from the convolution data.
 ```{r}
-insp_start <- get_inspiration_start(convolution_data)
+insp_start <- VitalDBR::get_inspiration_start(convolution_data)
 ```
 
 The function returns the times of the peaks in a dataframe and we can then plot the inspirations on the AWP signal:
@@ -156,7 +156,7 @@ VitalDBR::pp_plot_color(beats_indexed, insp_start) + ggtitle('Pulse Pressure') +
 
 On the right plot we can also start to see why this is important. It seems that there is a relationship between inspiration and pulse pressure. This is the relationship we want to model with the GAM framework.
 ```{r fig.align="center", fig.width=14, warning=FALSE}
-pp_plot_color_and_index(beats_indexed, insp_start)
+VitalDBR::pp_plot_color_and_index(beats_indexed, insp_start)
 ```
 
 
@@ -247,8 +247,76 @@ Lastly, we fitted and plotted the GAM with the two splines, $s_1(ann\_rel\_index
 
 *NOT DONE*
 
-# Does PPV influence the number of days a patient spend in the ICU?
-This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU.
+# Utilizing VitalDBR to determine the pulse pressure variation's influence on the length of patient's ICU stay
+
+```{r, message=FALSE}
+library(MASS)
+library(pscl)
+library(cplm)
+library(tweedie)
+library(broom)
+library("tidyverse")
+library(devtools)
+install_github('legendenomgeorg/VitalDBR/VitalDBR')
+library(VitalDBR)
+library(MuMIn)
+```
+
+## Motivation
+This part of the vignette revolves around utilizing what we have previously done, to better understand whether the Pulse Pressure Variation (PPV) during an operation influences the days spent in the ICU (intensive care unit.
+
+The independent variables we choose to do this study are the following:
+
+* Age
+  + The age of the patient
+
+* Sex
+  + The gender of the patient
+  
+* Asa
+  + ASA score is a metric used to determine if someone is healthy enough to tolerate surgery and anasthesia
+
+* Emop
+  + A binary variable that is 1 if the operation is an emergency. 
+  
+* BMI
+  + The body mass index of the patient. Calculated as weight over heigh in meters squared: $BMI = \left(\frac{kg}{m^2}\right)$
+
+* PPV_under_5
+  + Proportion of 2 minute intervals with a pulse pressure variation under 5 out of the entire operation
+  
+* PPV_over_8
+  + Proportion of 2 minute intervals with a pulse pressure variation over 8 out of the entire operation
+  
+* PPV_avg_first30
+  + The average of the first 15 two minute interval measurements of PPV 
+  
+* PPV_avg_last30
+  + The average of the last 15 two minute interval measurements of PPV 
+  + Note due to anomalies in data, some of these values are 0, and we have therefore removed those     cases from our data.
+  
+* knife_time
+  + Total time of the operation, in hours
+  + Derived from the opstart and opend columns
+
+* dangerop
+  + Indicates whether the operation is of a type deemed moderate/high risk. Which are:
+  + Colorectal, Hepatic, Vascular, Biliary/pancreas, stomach and Transplantation
+  + Note that this is very broad, but it is our best way atm, to get an indicator of the severity of the operation
+  
+* preop_htn
+  + A binary indicator of whether the patient has hyptertension (High Blood Pressure)
+
+* preop_dm
+  + Whether the patient has too high blood pressure
+  
+* preop_cr
+  + A measurement of how healthy the patients kidneys are (high is bad)
+  
+* preop_alt
+  + A measurement of how healthy the patients livers are (high is bad)
+
+The preop_xxx covariates selected here all indicates whether the patients have different kinds of comorbidities prior to surgery. Patients with e.g. hypertension or diabetes have an a priori probablity of a worse outcome compared with patients that do not have these conditions. As an example, diabetes patients often have a reduced ability for wound healing compared with non-diabetic patients. Specific organs' function such as liver and kidney are also known risk factors for post-operative outcomes, which is the reason why we include laboratory test values indicating the pre-oparative function of the kidney and the liver - some of the most crucial organs for the body's hemostasis (Homeostasis is a state of equilibrium in the biological organism)
 
 ## Creating the dataset
 To create the data set we need to calculate the PPV for every other minute of every operation... That is a lot of calculation! Therefore we have added the final dataset to the repo as "df.csv" such that you do not have to spend sleepless nights hoping that R doesn't crash during it's 1147th iteration.
@@ -283,15 +351,15 @@ tracks <- VitalDBR::load_VDB("https://api.vitaldb.net/trks") %>%
 knitr::kable(head(tracks))
 ```
 
-We then join those two datasets together by their case id, which results in the final dataset:
+We then join those two datasets together by their case id, which results in the final dataset
 ```{r}
 merged <- merge(x=tracks,y=cases,by="caseid") %>% dplyr::select(-one_of("n"))
 knitr::kable(head(merged))
 ```
 
+And now for the part where we combine everything we have done so far to create the dataset we need to be able to do statistical analysis on the effects of the PPV on patients.
 
-And now for the part where we combine everything we have done so far to create the dataset we need to be able to do statistical analysis on the effects of the PPV on patients. 
-### Calculating PPV
+## Calculating PPV
 The algorithm below, gets a dataset where it extracts the current caseid. Then it proceeds to load the ART and AWP timeseries belonging to those caseids. Then for each 2 minute intervals it calculates the inspiration, the systolic and diastolic peaks. From those it models a GAM like above and from that GAM it calculates the Pulse Pressure Variation. The PPV is then added to a list, which contains all the PPV measurements from that case. This means that it if the operation is 120 minutes, it creates a list PPV of length 60, from which it calculates the following variables:
 
 * PPV_under5
@@ -309,7 +377,7 @@ The algorithm below, gets a dataset where it extracts the current caseid. Then i
   + We use this to see whether it matters to for example have a lowered PPV as a result of the operation
   
 These variables are then used later in the statistical analysis to determine whether they influence the outcome. 
-This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements, mean that we can't include ALL of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. This is because the data originates from recent years, where tidal volume settings are lower compared with 10-20 years ago.
+This leads to a discussion on whether these are "good" metrics. The nature of the PPV measurements mean that we can't include $\textit{ALL}$ of them. We decided with our advisors, that looking at the proportions under 5 and over 8, were the best compromise. This is because the data originates from recent years, where tidal volume settings are lower compared with 10-20 years ago.
 
 The interval stems from domain knowledge, and we constrain it to the time spent outside the [5;8] interval relative to the entire surgical length, i.e. a number between 0 and 1 as the proportion is more relevant than the amount of measurements below or above.
 
@@ -433,9 +501,6 @@ process_cases <- function(data){
   data <- cbind(data, ppv_last30)
   return(data)
 } 
-
-#ppv_data <- process_cases(merged)
-
 ```
 
 
@@ -445,82 +510,9 @@ process_cases <- function(data){
 
   + A catch-it-all approach was used two places in this function. Due to data-irregularity of some of the cases, we decided to put all calculations in one big try-except clause. We initially spent a long time trying to account for all edge cases, but in the end we decided that if an interval of the timeseries was of very bad data-quality, we would rather set it to NA, than keep trying to adapt our function around it. This was done as a result of a discussion with our advisors, who suggested, that we are not at all interested in data, if it is of such bad condition that no "organic process" can have caused the quality decline.
 
-# Statistical Analysis
-```{r, message=FALSE}
-library(MASS)
-library(pscl)
-library(cplm)
-library(tweedie)
-library(broom)
-library("tidyverse")
-library(devtools)
-install_github('legendenomgeorg/VitalDBR/VitalDBR')
-library(VitalDBR)
-library(MuMIn)
-```
-
-## Motivation for statistical analysis
-As stated in the introduction, we want to look into the importance of the Pulse Pressure Variation (PPV) on the amount of days the patient spend in the ICU (intensive care unit).
-
-The independent variables we choose to do this study are the following:
-
-* Age
-  + The age of the patient
-
-* Sex
-  + The gender of the patient
-  
-* Asa
-  + ASA score is a metric used to determine if someone is healthy enough to tolerate surgery and anasthesia
-
-* Emop
-  + A binary variable that is 1 if the operation is an emergency. 
-  
-* BMI
-  + The body mass index of the patient. Calculated as weight over heigh in meters squared: $BMI = \left(\frac{kg}{m^2}\right)$
-
-* PPV_under_5
-  + Proportion of 2 minute intervals with a pulse pressure variation under 5 out of the entire operation
-  
-* PPV_over_8
-  + Proportion of 2 minute intervals with a pulse pressure variation over 8 out of the entire operation
-  
-* PPV_avg_first30
-  + The average of the first 15 two minute interval measurements of PPV 
-  
-* PPV_avg_last30
-  + The average of the last 15 two minute interval measurements of PPV 
-  + Note due to anomalies in data, some of these values are 0, and we have therefore removed those     cases from our data.
-  
-* knife_time
-  + Total time of the operation, in hours
-  + Derived from the opstart and opend columns
-
-* dangerop
-  + Indicates whether the operation is of a type deemed moderate/high risk. Which are:
-  + Colorectal, Hepatic, Vascular, Biliary/pancreas, stomach and Transplantation
-  + Note that this is very broad, but it is our best way atm, to get an indicator of the severity of the operation
-  
-* preop_htn
-  + A binary indicator of whether the patient has hyptertension (High Blood Pressure)
-
-* preop_dm
-  + Whether the patient has too high blood pressure
-  
-* preop_cr
-  + A measurement of how healthy the patients kidneys are (high is bad)
-  
-* preop_alt
-  + A measurement of how healthy the patients livers are (high is bad)
-  
-
-  
-
-The preop_xxx covariates selected here all indicates whether the patients have different kinds of comorbidities prior to surgery. Patients with e.g. hypertension or diabetes have an a priori probablity of a worse outcome compared with patients that do not have these conditions. As an example, diabetes patients often have a reduced ability for wound healing compared with non-diabetic patients. Specific organs' function such as liver and kidney are also known risk factors for post-operative outcomes, which is the reason why we include laboratory test values indicating the pre-oparative function of the kidney and the liver - some of the most crucial organs for the body's hemostasis (Homeostasis is a state of equilibrium in the biological organism)
-
-
 ## Analysis
-First we import the data created by the algorithm above, clean the data and also create the new variables like knife_time and dangerop. 
+
+First step in our analysis is to import the data created by the algorithm above, clean the data and also create the new variables like knife_time and dangerop. 
 ```{r}
 data <- read.csv("df.csv")
 cases <- VitalDBR::load_VDB("https://api.vitaldb.net/cases")
@@ -553,29 +545,34 @@ Next, we produce scatter plots in order to get a visual on how ICU days after su
 
 ```{r,fig.width = 12}
 ggplot(data = data, aes(y = icu, x = age)) + geom_point() + labs(x = 'Age') + 
-  ggplot(data = data, aes(y = icu, x = dangerop)) + geom_point() + labs(x = 'Dangerous operation \n0 = no, 1 = yes') + 
-  ggplot(data = data, aes(y = icu, x = knife_time)) + geom_point() +labs(x = 'Operation Knife Time') + 
-  ggplot(data = data, aes(y = icu, x = asa)) + geom_point() + labs(x = 'ASA score') + 
+  ggplot(data = data, aes(y = icu, x = dangerop)) + geom_point() + labs(x = ' dangerop \nDangerous operation, 0 = no, 1 = yes') + 
+  ggplot(data = data, aes(y = icu, x = knife_time)) + geom_point() +labs(x = 'knife_time \nOperation Knife Time') + 
   ggplot(data = data, aes(y = icu, x = preop_cr)) + geom_point() + labs(x = 'preop_cr \nMeasure for Kidney Health (high is bad)') + 
-  ggplot(data = data, aes(y = icu, x = preop_alt)) + geom_point() + labs(x = 'preop_alt \nMeasure for Liver Health (high is bad)') + plot_annotation(title = 'Scatter Plots with ICU days against \nsome of the independent variables')  & theme_classic() & labs(y = 'ICU days') & geom_point(col ='#63A0E1') & theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+  ggplot(data = data, aes(y = icu, x = preop_alt)) + geom_point() + labs(x = 'preop_alt \nMeasure for Liver Health (high is bad)') +
+  ggplot(data = data, aes(y = icu, x = preop_dm)) + geom_point() + labs(x = 'preop_dm \nDiabetes, 0 = no, 1 = yes') +
+  ggplot(data = data, aes(y = icu, x = ppv_over8)) + geom_point() + labs(x = 'PPV_over_8 \n% of operation \nwith PPV over 8') + 
+  ggplot(data = data, aes(y = icu, x = ppv_under5)) + geom_point() + labs(x = 'PPV_under_5 \n% of operation \nwith PPV under 5') +
+  ggplot(data = data, aes(y = icu, x = asa)) + geom_point() + labs(x = 'ASA score')  + plot_annotation(title = 'Scatter Plots with ICU days against \nsome of the independent variables')  & theme_classic() & labs(y = 'ICU days') & geom_point(col ='#63A0E1') & theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 ```
-Hmm... Doesn't reveal any strong relationships besides ICU against ASA.
+Hmm... Doesn't reveal any strong relationships besides ICU against ASA (perhaps the observation with ASA score = 6 and ICU days = 0 died?)
 
+
+We begin with a simple linear regression
 ```{r}
 summary(linear_model <-lm(icu_days ~ . , data=data))
 ```
 
 We will refrain from interpreting coefficients, before we have decided on the best model. So to determine whether our linear regression model violates its assumptions, we do a classic plot of the residuals against the dependent variable and a qqplot.
 
-```{r}
-residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0,color= "#f8766d") +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot") +theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+```{r, fig.align = 'center'}
+residualplot<- ggplot(broom::augment(linear_model), aes(x = icu_days, y = .resid)) + geom_point() +geom_hline(yintercept=0,color= "#f8766d") +xlab("Days in ICU") + ylab("Residuals") + ggtitle("Residual Plot") +theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 
 qqplot <- ggplot(broom::augment(linear_model), aes(sample = .resid)) +
-  geom_qq() + geom_qq_line(color= "#f8766d" ) + xlab("Theoretical Quantiles") + ylab("") + ggtitle("Normal QQ-plot") + theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+  geom_qq() + geom_qq_line(color= "#f8766d" ) + xlab("Theoretical Quantiles") + ylab("") + ggtitle("Normal QQ-plot") + theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 residualplot + qqplot
 ```
 
-On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity, since the variance seems to be dependent on days in ICU. [Source, 3.2.1 Modelkontrol](https://data.math.au.dk/interactive/matstat/Bog502.html)
+On the left plot where we plot the residuals against our dependent variable, we can see that there seems to be systematic deviation from the baseline, indicating a non-linear relationship in our data. It also indicates heteroskedasticity, since the variance seems to be dependent on days in ICU. [Source](https://data.math.au.dk/interactive/matstat/Bog502.html)
 
 
 We can also see that both ends of our qqplot is behaving unexpectedly, this indicates that the errors are not normally distributed. Which breaks the assumption that errors given X are normally distributed. This is a problem since normal errors give us normally distributed coefficient estimates $\beta$, and our p-values and confidence intervals rely on that. This means that the p-values and coefficients are invalid. [Source](https://data.library.virginia.edu/normality-assumption/)
@@ -590,7 +587,7 @@ icu_barplot<-ggplot(data=as.data.frame(count), aes(x=as.integer(as.character(Var
   geom_bar(stat="identity") +
   ggtitle("Barplot of ICU days")+
   xlab("Days in ICU") + ylab("# observations") +
-  theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 25, face = 'bold', color = '#63A0E1', family = 'Palatino'))
+  theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 20, face = 'bold', color = '#63A0E1', family = 'Palatino'))
 icu_barplot
 ```
 
@@ -607,7 +604,7 @@ Therefore we will introduce the idea of Generalized linear models, to combat the
 
 
 ## GLM
-## What is a Generalized Linear Model?
+### What is a Generalized Linear Model?
 A standard linear regression is a model of the form $$Y = X\beta + \epsilon$$ where $\epsilon \sim N(0,\sigma^2)$. 
 We checked above that our regression does not live up to the requirement for $\epsilon$.
 
@@ -776,7 +773,7 @@ In our case, this formula can be interpreted with an example. Let's say we are l
 And the other parameter X determines the chance of experiencing an event where you have to stay 29 days at the ICU, ie. the severity, which is given by the gamma distribution.
 
 To visualize this, lets look at the barplot from the beginning, but now imagine that the vertical value is decided by a poisson distribution and the horizontal value is given by the gamma distribution. Then the compound poisson process is obtained by marginalizing over T (keeping T fixed and evaluating X).
-```{r}
+```{r, fig.align = 'center'}
 library(latex2exp)
 icu_barplot + ggtitle("Compound Poisson Distribution") + xlab(TeX("X ~ Gamma($alpha, beta$)")) + ylab(TeX("T ~ poisson($lambda$)"))
 ```
@@ -808,7 +805,7 @@ summary(c_pois_reg)
 
 ## Comparing all models
 
-### Comparing models through metrics:
+### Comparing models through metrics
 We will compare our models with the metrics AICc and BIC. We look for the model with the lowest of these values.
 
 #### AIC
@@ -934,7 +931,7 @@ The above significant variables are not really that surprising, except for knife
 
 [Source for coefficient interpretation](https://rpubs.com/kaz_yos/pscl-2)
 
-## Future work:
+## Future work
 Our original research question was whether PPV influenced in hospital mortality, but we had to abandon the idea, due to the fact that only about 20 out of the 1200 patients died in the hospital.
 
 Another dependent variable that would hold much more information than ICU stay, would be 30-day mortality, ie. whether a patient dies within 30 days after the operation. If that is not possible, even having acces to the length of the hospital stay, would contain more information than length of ICU stay.
